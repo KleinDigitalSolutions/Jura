@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment variables
+.env
+
+# Storage (built artifacts: Qdrant DB, documents.json, graph)
+legal_rag_storage/
+
+# Logs
+logs/
+*.log
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

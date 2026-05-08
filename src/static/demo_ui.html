@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEX — Legal RAG Demo</title>
+<style>
+  :root {
+    --bg: #08090a;
+    --panel: #0d0e12;
+    --border: #1a1c24;
+    --text: #c8ccd4;
+    --text-dim: #6b7080;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59,130,246,0.15);
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --purple: #8b5cf6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
+
+  /* ── Header ── */
+  header { background: var(--panel); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  header .logo { display: flex; align-items: center; gap: 10px; }
+  header h1 { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+  header .badge { font-size: 11px; background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  header .stats { display: flex; gap: 18px; font-size: 12px; color: var(--text-dim); }
+  header .stats b { color: var(--text); }
+
+  /* ── Layout ── */
+  main { display: grid; grid-template-columns: 1fr 420px; height: calc(100vh - 57px); overflow: hidden; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } .tech-panel { display: none; } }
+
+  /* ── Left: Search + Results ── */
+  .search-col { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
+  .search-bar { padding: 16px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .search-bar form { display: flex; gap: 8px; }
+
+  /* Mode toggle */
+  .mode-tabs { display: flex; gap: 0; margin-bottom: 10px; background: var(--bg); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  .mode-tab { flex: 1; padding: 8px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--text-dim); transition: all 0.2s; }
+  .mode-tab.active { background: var(--accent); color: #fff; }
+  .mode-tab:not(.active):hover { color: var(--text); background: rgba(255,255,255,0.03); }
+
+  .search-bar input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; color: #fff; font-size: 15px; outline: none; transition: border-color 0.2s; }
+  .search-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  .search-bar button { background: var(--accent); color: #fff; border: none; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+  .search-bar button:hover { background: #2563eb; }
+  .search-bar button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .examples { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .examples button { background: var(--bg); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 12px; border-radius: 14px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .examples button:hover { background: #1a1c24; color: #fff; border-color: #333; }
+
+  .results-area { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .results-area .empty { text-align: center; color: var(--text-dim); padding: 60px 20px; }
+  .results-area .empty h2 { color: #fff; font-size: 18px; margin-bottom: 8px; }
+  .results-area .empty p { font-size: 13px; max-width: 400px; margin: 0 auto; }
+
+  /* ── LLM Answer card ── */
+  .llm-answer { background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08)); border: 1px solid var(--accent); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .llm-answer.hidden { display: none; }
+  .llm-answer .a-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .llm-answer .a-header h3 { font-size: 14px; color: #fff; font-weight: 700; }
+  .llm-answer .a-header .model-badge { font-size: 10px; background: var(--panel); border: 1px solid var(--border); padding: 2px 8px; border-radius: 8px; color: var(--text-dim); }
+  .llm-answer .a-body { font-size: 14px; color: var(--text); line-height: 1.8; white-space: pre-wrap; }
+  .llm-answer .a-body p { margin-bottom: 8px; }
+  .llm-answer .a-citations { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .llm-answer .a-citations summary { font-size: 12px; color: var(--text-dim); cursor: pointer; font-weight: 600; }
+  .llm-answer .a-citations .cite-item { font-size: 12px; color: var(--text-dim); padding: 4px 0; }
+  .llm-answer .a-loading { display: flex; gap: 8px; align-items: center; color: var(--text-dim); font-size: 13px; }
+  .llm-answer .a-loading .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .llm-answer .hidden { display: none; }
+  .llm-answer .a-body:empty::after { content: '▊'; animation: blink 1s step-end infinite; color: var(--accent); }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .result-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; transition: border-color 0.15s; cursor: default; }
+  .result-card:hover { border-color: #2a2d38; }
+  .result-card.pinned { border-color: var(--accent); background: rgba(59,130,246,0.06); }
+  .result-card .r-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px; gap: 12px; }
+  .result-card .r-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+  .r-badge.gesetz { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .r-badge.urteil { background: rgba(139,92,246,0.15); color: #a78bfa; }
+  .result-card .r-title { font-weight: 600; font-size: 14px; color: #fff; }
+  .result-card .r-scores { display: flex; gap: 10px; font-size: 11px; }
+  .result-card .r-scores span { color: var(--text-dim); }
+  .result-card .r-scores b { color: var(--amber); }
+  .result-card .r-scores b.final { color: var(--green); font-size: 13px; }
+
+  /* Expando text */
+  .result-card .r-text { font-size: 13px; color: var(--text); margin-top: 8px; line-height: 1.7; max-height: 120px; overflow: hidden; position: relative; transition: max-height 0.3s ease; }
+  .result-card .r-text.expanded { max-height: none; }
+  .result-card .r-text::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, var(--panel)); pointer-events: none; }
+  .result-card .r-text.expanded::after { display: none; }
+  .r-text-toggle { display: inline-block; font-size: 12px; color: var(--accent); cursor: pointer; margin-top: 4px; user-select: none; }
+  .r-text-toggle:hover { text-decoration: underline; }
+
+  .result-card .r-meta { font-size: 11px; color: var(--text-dim); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
+
+  .loading-pulse { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; color: var(--text-dim); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  .pipeline-trace { font-size: 11px; color: var(--text-dim); padding: 4px 0; display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+  .pipeline-trace .stage { background: var(--bg); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); }
+  .pipeline-trace .stage .t { color: var(--amber); }
+
+  /* ── Right: Tech Panel ── */
+  .tech-panel { background: var(--panel); display: flex; flex-direction: column; overflow-y: auto; padding: 20px; gap: 20px; }
+  .tech-panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); margin-bottom: 10px; }
+  .tech-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .tech-card h4 { font-size: 13px; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .tech-card h4 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.blue { background: var(--accent); }
+  .dot.green { background: var(--green); }
+  .dot.amber { background: var(--amber); }
+  .dot.purple { background: var(--purple); }
+  .tech-card p { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+  .tech-card .metric { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
+  .tech-card .metric span:first-child { color: var(--text-dim); }
+  .tech-card .metric span:last-child { color: #fff; font-weight: 600; }
+
+  /* ── Pipeline viz ── */
+  .pipeline-viz { display: flex; flex-direction: column; gap: 6px; }
+  .pipe-step { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); font-size: 12px; }
+  .pipe-step .step-num { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; flex-shrink: 0; }
+  .pipe-step .step-num.s1 { background: rgba(59,130,246,0.2); color: #60a5fa; }
+  .pipe-step .step-num.s2 { background: rgba(245,158,11,0.2); color: #f59e0b; }
+  .pipe-step .step-num.s3 { background: rgba(34,197,62,0.2); color: #22c55e; }
+  .pipe-step .step-num.s4 { background: rgba(139,92,246,0.2); color: #a78bfa; }
+  .pipe-step .step-label { font-weight: 600; color: #fff; }
+  .pipe-step .step-detail { color: var(--text-dim); font-size: 11px; }
+  .pipe-arrow { text-align: center; color: var(--text-dim); font-size: 10px; }
+
+  /* ── Knowledge Graph mini ── */
+  .kg-mini { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .kg-mini .node { display: inline-block; background: var(--panel); border: 1px solid var(--border); padding: 3px 8px; border-radius: 12px; font-size: 11px; margin: 2px; color: var(--text); }
+  .kg-mini .edge { color: var(--accent); margin: 0 2px; font-size: 10px; }
+
+  /* ── Live query info ── */
+  .query-info { font-size: 11px; color: var(--text-dim); }
+  .query-info b { color: var(--green); }
+  .query-info .detected { color: var(--amber); }
+
+  .footer { font-size: 10px; color: var(--text-dim); text-align: center; padding: 8px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <h1>LEX</h1>
+    <span class="badge">DEMO</span>
+  </div>
+  <div class="stats">
+    <span>📚 <b>12.766</b> Docs</span>
+    <span>⚖️ <b>44</b> Gesetze</span>
+    <span>🏛️ <b>230</b> Urteile</span>
+    <span>🖥️ <b>T4 GPU</b></span>
+  </div>
+</header>
+
+<main>
+  <!-- LEFT -->
+  <div class="search-col">
+    <div class="search-bar">
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="search" onclick="setMode('search')">🔍 Suchen</button>
+        <button class="mode-tab" data-mode="ask" onclick="setMode('ask')">🤖 Fragen</button>
+      </div>
+      <form onsubmit="handleSubmit(event)">
+        <input type="text" id="query" placeholder="Rechtsfrage oder §-Referenz eingeben…" autofocus>
+        <button type="submit" id="search-btn">Suchen</button>
+      </form>
+      <div class="examples">
+        <button onclick="quickSearch('Was besagt § 242 BGB?')">§ 242 BGB</button>
+        <button onclick="quickSearch('Wann ist eine Kündigung wirksam?')">Kündigung</button>
+        <button onclick="quickSearch('Was gilt bei Sachmängeln nach Kaufrecht?')">Sachmängel</button>
+        <button onclick="quickSearch('Wie ist Diebstahl im StGB definiert?')">Diebstahl</button>
+        <button onclick="quickSearch('Welche Pflichten hat ein GmbH-Geschäftsführer?')">GmbH</button>
+        <button onclick="quickSearch('BGH Zivilsenat Mietmangel Rücktritt')">BGH Mietrecht</button>
+      </div>
+    </div>
+    <div class="results-area" id="results">
+      <div class="empty" id="empty-state">
+        <h2>LEX — Hybride Rechtssuche</h2>
+        <p>12.152 Paragraphen + 230 BGH/BVerfG-Urteile durchsuchbar mit bge-m3 Embeddings, Weighted Fusion und Cross-Encoder Reranking.</p>
+        <div class="pipeline-trace" style="justify-content:center;margin-top:16px;">
+          <span class="stage">🔍 Query</span> →
+          <span class="stage">🧠 bge-m3</span> →
+          <span class="stage">⚡ Fusion</span> →
+          <span class="stage">🎯 Reranker</span> →
+          <span class="stage">📋 Top-K</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Tech Panel -->
+  <div class="tech-panel" id="tech-panel">
+    <div>
+      <h3>⚙️ Pipeline</h3>
+      <div class="pipeline-viz">
+        <div class="pipe-step">
+          <span class="step-num s1">1</span>
+          <div>
+            <div class="step-label">Query Embedding</div>
+            <div class="step-detail">BAAI/bge-m3 · 1024-dim dense + learned sparse</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">▼</div>
+        <div class="pipe-step">
+          <span class="step-num s2">2</span>
+          <div>
+            <div class="step-label">Weighted Fusion</div>
+            <div class="step-detail">Dense 0.7 + Sparse 0.3 · min-max normalized</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">▼</div>
+        <div class="pipe-step">
+          <span class="step-num s3">3</span>
+          <div>
+            <div class="step-label">Cross-Encoder Reranker</div>
+            <div class="step-detail">BAAI/bge-reranker-v2-m3 · joint (query, doc) scoring</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">▼</div>
+        <div class="pipe-step">
+          <span class="step-num s4">4</span>
+          <div>
+            <div class="step-label">LLM Answer (Optional)</div>
+            <div class="step-detail">DeepSeek / Claude · LEX/JURA persona · mit Quellen</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3>🔬 Modells</h3>
+      <div class="tech-card">
+        <h4><span class="dot blue"></span> Embedding</h4>
+        <p>BAAI/bge-m3 (FlagEmbedding) — 2.2GB, 1024-dim dense + learned sparse vectors. Multi-lingual, optimiert für semantische Ähnlichkeit.</p>
+        <div class="metric"><span>Dimension</span><span>1024-d</span></div>
+        <div class="metric"><span>Sparse</span><span>Learned (lexical)</span></div>
+      </div>
+      <div class="tech-card" style="margin-top:8px;">
+        <h4><span class="dot amber"></span> Reranker</h4>
+        <p>BAAI/bge-reranker-v2-m3 — 1.1GB cross-encoder. Joint encoding von (query, doc) pairs für präzises Re-Ranking.</p>
+        <div class="metric"><span>Normalisierung</span><span>Sigmoid [0,1]</span></div>
+      </div>
+      <div class="tech-card" style="margin-top:8px;">
+        <h4><span class="dot green"></span> Vector DB</h4>
+        <p>Qdrant (local mode, SQLite) — COSINE distance, named sparse vectors, 12.766 Punkte.</p>
+      </div>
+      <div class="tech-card" style="margin-top:8px;">
+        <h4><span class="dot purple"></span> Knowledge Graph</h4>
+        <p>NetworkX DiGraph — regex §-Verweis parser, 364K edges zwischen Paragraphen.</p>
+      </div>
+    </div>
+
+    <div>
+      <h3>📊 Live Stats</h3>
+      <div id="live-stats">Wird bei erster Suche geladen…</div>
+      <div class="query-info" id="query-diag" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="footer">
+      LEX Legal RAG · Modal T4 GPU · Gesetze + BGH/BVerfG Urteile
+    </div>
+  </div>
+</main>
+
+<script>
+  let statsLoaded = false;
+  let currentMode = 'search';
+
+  async function loadStats() {
+    if (statsLoaded) return;
+    try {
+      const r = await fetch('/api/legal/stats');
+      const d = await r.json();
+      document.getElementById('live-stats').innerHTML =
+        `<div style="display:flex;justify-content:space-between;font-size:12px;">` +
+        `<span>Gesamtdocs</span><b>${d.total_docs.toLocaleString()}</b>` +
+        `</div>`;
+      statsLoaded = true;
+    } catch(e) {}
+  }
+
+  function setMode(mode) {
+    currentMode = mode;
+    document.querySelectorAll('.mode-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.mode === mode);
+    });
+    document.getElementById('search-btn').textContent = mode === 'ask' ? 'Fragen' : 'Suchen';
+    document.getElementById('query').placeholder = mode === 'ask'
+      ? 'Stelle deine Rechtsfrage…'
+      : 'Rechtsfrage oder §-Referenz eingeben…';
+  }
+
+  function quickSearch(q) {
+    document.getElementById('query').value = q;
+    handleSubmit(new Event('submit'));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (currentMode === 'ask') {
+      await ask();
+    } else {
+      await search();
+    }
+  }
+
+  function toggleText(btn) {
+    const card = btn.closest('.result-card');
+    const textEl = card.querySelector('.r-text');
+    const isExpanded = textEl.classList.toggle('expanded');
+    btn.textContent = isExpanded ? '▲ Weniger' : '▼ Weiterlesen';
+  }
+
+  async function search() {
+    const q = document.getElementById('query').value.trim();
+    if (!q) return;
+
+    const btn = document.getElementById('search-btn');
+    const results = document.getElementById('results');
+    const diag = document.getElementById('query-diag');
+
+    btn.disabled = true;
+    results.innerHTML = '<div class="loading-pulse">⚡ Hybride Suche läuft…<br><small>bge-m3 Embedding → Weighted Fusion → Reranker</small></div>';
+    loadStats();
+
+    const t0 = performance.now();
+    try {
+      const resp = await fetch('/api/legal/search?q=' + encodeURIComponent(q) + '&top_k=7');
+      const data = await resp.json();
+      const elapsed = (performance.now() - t0).toFixed(0);
+
+      const hasPara = /§+\s*\d+/.test(q);
+      const lawMatch = q.match(/\b(BGB|StGB|HGB|ZPO|StPO|GG|VwVfG|AktG|GmbHG?|InsO|FamFG|BDSG|UrhG|MarkenG|PatG|BauGB|VwGO|AO|KStG|EStG|UStG|UmwG|WpHG|BetrVG|SGB|KSchG|BVerfGG|TKG|WEG|EGBGB)\b/gi);
+      const hasUrteilRef = /\b(BGH|BVerfG|Urteil|Beschluss|Senat)\b/i.test(q);
+
+      let diagHtml = `<b>${elapsed}ms</b> Latenz · ${data.count} Treffer`;
+      if (hasPara) diagHtml += ' · <span class="detected">📌 §-Pinning aktiv</span>';
+      if (lawMatch) diagHtml += ` · <span class="detected">⚖️ Filter: ${lawMatch.join(', ')}</span>`;
+      diag.innerHTML = diagHtml;
+
+      if (!data.results.length) {
+        results.innerHTML = '<div class="empty"><h2>Keine Treffer</h2><p>Andere Formulierung versuchen.</p></div>';
+        btn.disabled = false;
+        return;
+      }
+
+      let html = '';
+      data.results.forEach((r, i) => {
+        const isPinned = r.score >= 1.0 && hasPara;
+        const typ = r.typ || 'gesetz';
+        const badgeClass = typ === 'urteil' ? 'urteil' : 'gesetz';
+        const badgeText = typ === 'urteil' ? '🏛️ ' + (r.gericht||'') + ' · ' + (r.aktenzeichen||'') : '📜 ' + (r.abkürzung||'') + ' ' + (r.paragraph||'');
+
+        const fusionScore = r.score || 0;
+        const rerankScore = r.rerank_score || fusionScore;
+
+        html += '<div class="result-card' + (isPinned ? ' pinned' : '') + '">' +
+          '<div class="r-header">' +
+            '<span class="r-badge ' + badgeClass + '">' + badgeText + '</span>' +
+            '<div class="r-scores">' +
+              '<span>Fusion <b>' + fusionScore.toFixed(3) + '</b></span>' +
+              (r.rerank_score !== undefined ? '<span>Rerank <b class="final">' + rerankScore.toFixed(4) + '</b></span>' : '') +
+            '</div>' +
+          '</div>';
+
+        if (r.paragraph_titel) {
+          html += '<div class="r-title">' + escHtml(r.paragraph_titel) + '</div>';
+        } else if (typ === 'urteil' && r.leitsatz) {
+          html += '<div class="r-title">' + escHtml(r.leitsatz.substring(0, 120)) + '…</div>';
+        }
+
+        const text = r.inhalt || r.volltext || '';
+        const needsToggle = text.length > 400;
+        html += '<div class="r-text' + (needsToggle ? '' : ' expanded') + '">' + escHtml(text) + '</div>';
+        if (needsToggle) {
+          html += '<span class="r-text-toggle" onclick="toggleText(this)">▼ Weiterlesen</span>';
+        }
+
+        html += '<div class="r-meta">';
+        if (r.rechtsgebiet) html += '<span>📂 ' + escHtml(r.rechtsgebiet) + '</span>';
+        if (r.datum) html += '<span>📅 ' + r.datum + '</span>';
+        if (r.stand) html += '<span>🔄 Stand: ' + r.stand + '</span>';
+        html += '</div>';
+
+        if (isPinned) html += '<div style="font-size:10px;color:#60a5fa;margin-top:4px;">📌 Exakter §-Treffer — an Position 1 gepinnt</div>';
+        html += '</div>';
+      });
+
+      results.innerHTML = html;
+    } catch(e) {
+      results.innerHTML = '<div class="empty"><h2>Fehler</h2><p>' + escHtml(e.message) + '</p></div>';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderSourceCards(citations, container) {
+    let html = '<div style="font-size:12px;color:var(--text-dim);margin:-8px 0 8px;font-weight:600;">📄 Zugrunde liegende Quellen</div>';
+    citations.forEach(c => {
+      const text = c.text_preview || '';
+      const needsToggle = text.length > 400;
+      const url = c.url || '';
+      html += '<div class="result-card">' +
+        '<div class="r-header">' +
+          '<span class="r-badge gesetz">📜 ' + escHtml(c.gesetz || '') + ' ' + escHtml(c.paragraph || '') + '</span>' +
+          '<div class="r-scores"><span>Score <b class="final">' + (c.score || 0).toFixed(4) + '</b></span></div>' +
+        '</div>' +
+        (c.titel ? '<div class="r-title">' + escHtml(c.titel) + '</div>' : '') +
+        '<div class="r-text' + (needsToggle ? '' : ' expanded') + '">' + escHtml(text) + '</div>' +
+        (needsToggle ? '<span class="r-text-toggle" onclick="toggleText(this)">▼ Weiterlesen</span>' : '') +
+        (url ? '<div class="r-meta"><span>🔗 <a href="' + escHtml(url) + '" target="_blank" style="color:var(--accent);text-decoration:none;">Quelle öffnen</a></span></div>' : '') +
+        '</div>';
+    });
+    container.innerHTML = html;
+  }
+
+  async function ask() {
+    const q = document.getElementById('query').value.trim();
+    if (!q) return;
+
+    const btn = document.getElementById('search-btn');
+    const results = document.getElementById('results');
+    const diag = document.getElementById('query-diag');
+
+    btn.disabled = true;
+    loadStats();
+
+    results.innerHTML = `
+      <div class="llm-answer" id="answer-card">
+        <div class="a-header">
+          <h3>🤖 LEX antwortet</h3>
+          <span class="model-badge" id="stream-model">DeepSeek / Claude</span>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:auto;" id="stream-time"></span>
+        </div>
+        <div class="a-body" id="answer-body"></div>
+        <div class="a-loading" id="answer-loading">
+          <div class="spinner"></div>
+          <span>Suche in Gesetzen…</span>
+        </div>
+        <div class="a-citations hidden" id="answer-citations"></div>
+      </div>
+      <div id="ask-results"></div>`;
+
+    const t0 = performance.now();
+    let answerText = '';
+    let hasReceivedSearch = false;
+
+    const es = new EventSource('/api/legal/ask/stream?q=' + encodeURIComponent(q) + '&top_k=5');
+
+    es.addEventListener('search', (e) => {
+      const data = JSON.parse(e.data);
+      const loading = document.getElementById('answer-loading');
+      if (loading) {
+        loading.innerHTML = '<div class="spinner"></div><span>LEX formuliert Antwort…</span>';
+      }
+      if (data.citations && data.citations.length > 0) {
+        renderSourceCards(data.citations, document.getElementById('ask-results'));
+      }
+      hasReceivedSearch = true;
+    });
+
+    es.addEventListener('token', (e) => {
+      const token = JSON.parse(e.data);
+      if (token) {
+        answerText += token;
+        const body = document.getElementById('answer-body');
+        if (body) body.textContent = answerText;
+      }
+    });
+
+    es.addEventListener('done', (e) => {
+      const data = JSON.parse(e.data);
+      const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+
+      diag.innerHTML = `<b>${elapsed}s</b> Antwortzeit · Modell: ${data.model || 'deepseek-chat'}`;
+
+      const modelBadge = document.getElementById('stream-model');
+      if (modelBadge) modelBadge.textContent = data.model || 'deepseek-chat';
+
+      const timeEl = document.getElementById('stream-time');
+      if (timeEl) timeEl.textContent = elapsed + 's';
+
+      const loading = document.getElementById('answer-loading');
+      if (loading) loading.style.display = 'none';
+
+      es.close();
+      btn.disabled = false;
+    });
+
+    es.addEventListener('error', (e) => {
+      const loading = document.getElementById('answer-loading');
+      if (loading) {
+        loading.innerHTML = '<span style="color:var(--red)">❌ Fehler bei der Antwortgenerierung</span>';
+      }
+      // Fallback: if we never got search results, show error
+      if (!hasReceivedSearch) {
+        document.getElementById('ask-results').innerHTML =
+          '<div class="empty"><h2>Fehler</h2><p>Keine Verbindung zum Server.</p></div>';
+      }
+      setTimeout(() => { btn.disabled = false; }, 500);
+    });
+
+    // Safety timeout — close EventSource after 60s and re-enable button
+    setTimeout(() => {
+      es.close();
+      if (btn.disabled) {
+        btn.disabled = false;
+        const loading = document.getElementById('answer-loading');
+        if (loading) loading.style.display = 'none';
+      }
+    }, 60000);
+  }
+
+  function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>
