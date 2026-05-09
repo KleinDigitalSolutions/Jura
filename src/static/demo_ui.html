@@ -3,526 +3,1803 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEX — Legal RAG Demo</title>
+<title>LEX — Juristischer KI-Assistent</title>
 <style>
+  /* ═══════════════════════════════════════════
+     RESET + DESIGN TOKENS
+     ═══════════════════════════════════════════ */
   :root {
-    --bg: #08090a;
-    --panel: #0d0e12;
-    --border: #1a1c24;
-    --text: #c8ccd4;
-    --text-dim: #6b7080;
-    --accent: #3b82f6;
-    --accent-glow: rgba(59,130,246,0.15);
-    --green: #22c55e;
-    --amber: #f59e0b;
-    --red: #ef4444;
-    --purple: #8b5cf6;
+    --bg-primary: #050505;
+    --bg-secondary: #000000;
+    --bg-tertiary: #080808;
+    --bg-hover: #0f0f0f;
+    --border: #1a1a1a;
+    --border-light: #222222;
+
+    --text-primary: #ffffff;
+    --text-secondary: #888888;
+    --text-muted: #444444;
+
+    --accent: #ffffff;
+    --accent-hover: #ffffff;
+    --accent-light: rgba(255,255,255,0.05);
+    --accent-glow: rgba(255,255,255,0.02);
+
+    --gold: #b39359;
+    --gold-light: rgba(179,147,89,0.05);
+    --gold-text: #a68b5a;
+
+    --green: #4ade80;
+    --green-light: rgba(74,222,128,0.1);
+    --red: #f87171;
+    --red-light: rgba(248,113,113,0.08);
+
+    --sidebar-w: 260px;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-serif: 'Playfair Display', 'Georgia', serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --radius: 0px;
+    --radius-sm: 0px;
+    --shadow: 0 4px 30px rgba(0,0,0,0.5);
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    display: flex;
+    min-height: 100vh;
+    overflow: hidden;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.02;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-hover); text-decoration: underline; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::selection { background: var(--accent-light); color: var(--text-primary); }
 
-  /* ── Header ── */
-  header { background: var(--panel); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
-  header .logo { display: flex; align-items: center; gap: 10px; }
-  header h1 { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
-  header .badge { font-size: 11px; background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
-  header .stats { display: flex; gap: 18px; font-size: 12px; color: var(--text-dim); }
-  header .stats b { color: var(--text); }
+  /* ═══════════════════════════════════════════
+     SIDEBAR
+     ═══════════════════════════════════════════ */
+  .sidebar {
+    width: var(--sidebar-w);
+    min-width: var(--sidebar-w);
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    transition: transform var(--transition);
+    z-index: 20;
+  }
+  .sidebar-header {
+    padding: 18px 16px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .sidebar-logo {
+    width: auto; height: auto;
+    background: none;
+    border: 1px solid #fff;
+    padding: 2px 8px;
+    border-radius: 0;
+    font-weight: 700; font-size: 14px; color: #fff;
+    letter-spacing: 2px;
+    flex-shrink: 0;
+  }
+  .sidebar-brand {
+    font-family: var(--font-serif);
+    font-size: 16px; font-weight: 400; color: #fff;
+    letter-spacing: 0px;
+  }
+  .sidebar-brand small {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-muted);
+    letter-spacing: 0.3px;
+    margin-top: -1px;
+  }
+  .sidebar-toggle {
+    display: none;
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+  }
 
-  /* ── Layout ── */
-  main { display: grid; grid-template-columns: 1fr 420px; height: calc(100vh - 57px); overflow: hidden; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } .tech-panel { display: none; } }
+  .sidebar-section {
+    padding: 14px 16px 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
 
-  /* ── Left: Search + Results ── */
-  .search-col { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
-  .search-bar { padding: 16px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
-  .search-bar form { display: flex; gap: 8px; }
+  /* Chat History */
+  .sidebar-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 8px;
+  }
+  .history-list {
+    list-style: none;
+  }
+  .history-item {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background var(--transition);
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+  }
+  .history-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .history-item.active { background: var(--accent-light); color: var(--accent); }
+  .history-item .icon { font-size: 14px; opacity: 0.7; flex-shrink: 0; }
+  .history-item .title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .history-item .delete-btn {
+    opacity: 0;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px;
+    transition: opacity var(--transition);
+  }
+  .history-item:hover .delete-btn { opacity: 0.6; }
+  .history-item .delete-btn:hover { opacity: 1; color: var(--red); }
+  .history-empty {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+    line-height: 1.6;
+  }
 
-  /* Mode toggle */
-  .mode-tabs { display: flex; gap: 0; margin-bottom: 10px; background: var(--bg); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
-  .mode-tab { flex: 1; padding: 8px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--text-dim); transition: all 0.2s; }
-  .mode-tab.active { background: var(--accent); color: #fff; }
-  .mode-tab:not(.active):hover { color: var(--text); background: rgba(255,255,255,0.03); }
+  /* Sidebar: Aktueller Fall */
+  .sidebar-section.case {
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+  .case-input {
+    margin: 0 8px 8px;
+  }
+  .case-input textarea {
+    width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    color: var(--text-primary);
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 80px;
+    max-height: 200px;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  .case-input textarea:focus { border-color: var(--accent); }
+  .case-input textarea::placeholder { color: var(--text-muted); }
+  .case-active {
+    margin: 0 8px 8px;
+    padding: 8px 12px;
+    background: var(--gold-light);
+    border: 1px solid rgba(200,164,78,0.2);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--gold-text);
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+  .case-active .clear-case {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px;
+  }
+  .case-active .clear-case:hover { color: var(--red); }
 
-  .search-bar input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; color: #fff; font-size: 15px; outline: none; transition: border-color 0.2s; }
-  .search-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-  .search-bar button { background: var(--accent); color: #fff; border: none; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
-  .search-bar button:hover { background: #2563eb; }
-  .search-bar button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .examples { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-  .examples button { background: var(--bg); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 12px; border-radius: 14px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
-  .examples button:hover { background: #1a1c24; color: #fff; border-color: #333; }
+  /* Sidebar bottom stats */
+  .sidebar-footer {
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .sidebar-footer span { white-space: nowrap; }
+  .sidebar-footer b { color: var(--text-secondary); font-weight: 500; }
 
-  .results-area { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
-  .results-area .empty { text-align: center; color: var(--text-dim); padding: 60px 20px; }
-  .results-area .empty h2 { color: #fff; font-size: 18px; margin-bottom: 8px; }
-  .results-area .empty p { font-size: 13px; max-width: 400px; margin: 0 auto; }
+  /* ═══════════════════════════════════════════
+     MAIN CHAT AREA
+     ═══════════════════════════════════════════ */
+  .chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: relative;
+  }
+  .chat-header {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    background: var(--bg-primary);
+  }
+  .chat-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .chat-header .hamburger {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+  }
+  .chat-header .title-area h2 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .chat-header .title-area small {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .chat-header-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .chat-header-actions button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+  }
+  .chat-header-actions button:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-light);
+  }
 
-  /* ── LLM Answer card ── */
-  .llm-answer { background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08)); border: 1px solid var(--accent); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-  .llm-answer.hidden { display: none; }
-  .llm-answer .a-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-  .llm-answer .a-header h3 { font-size: 14px; color: #fff; font-weight: 700; }
-  .llm-answer .a-header .model-badge { font-size: 10px; background: var(--panel); border: 1px solid var(--border); padding: 2px 8px; border-radius: 8px; color: var(--text-dim); }
-  .llm-answer .a-body { font-size: 14px; color: var(--text); line-height: 1.8; white-space: pre-wrap; }
-  .llm-answer .a-body p { margin-bottom: 8px; }
-  .llm-answer .a-citations { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-  .llm-answer .a-citations summary { font-size: 12px; color: var(--text-dim); cursor: pointer; font-weight: 600; }
-  .llm-answer .a-citations .cite-item { font-size: 12px; color: var(--text-dim); padding: 4px 0; }
-  .llm-answer .a-loading { display: flex; gap: 8px; align-items: center; color: var(--text-dim); font-size: 13px; }
-  .llm-answer .a-loading .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .llm-answer .hidden { display: none; }
-  .llm-answer .a-body:empty::after { content: '▊'; animation: blink 1s step-end infinite; color: var(--accent); }
+  /* ── Messages ── */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+  }
+  .messages-inner {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 24px 24px 8px;
+  }
+
+  /* Welcome Screen */
+  .welcome {
+    text-align: center;
+    padding: 60px 20px 40px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .welcome-icon {
+    width: auto; height: auto;
+    background: none;
+    border: 1px solid #fff;
+    padding: 10px 20px;
+    border-radius: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 700; color: #fff;
+    margin: 0 auto 40px;
+    box-shadow: none;
+    letter-spacing: 4px;
+  }
+  .welcome h1 {
+    font-family: var(--font-serif);
+    font-size: 36px;
+    font-weight: 400;
+    color: #fff;
+    margin-bottom: 20px;
+    letter-spacing: -0.5px;
+  }
+  .welcome p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 24px;
+    line-height: 1.7;
+  }
+  .welcome .disclaimer {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 24px;
+    text-align: left;
+  }
+  .welcome .disclaimer strong { color: var(--gold-text); }
+  .welcome-examples {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    max-width: 600px;
+    margin: 40px auto 0;
+  }
+  .welcome-examples button {
+    background: var(--bg-secondary);
+    border: none;
+    color: var(--text-secondary);
+    padding: 16px 20px;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+    transition: all var(--transition);
+    font-family: var(--font-sans);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .welcome-examples button:hover {
+    background: var(--bg-hover);
+    color: #fff;
+  }
+  .welcome-examples button::after {
+    content: "→";
+    opacity: 0.3;
+    transition: all var(--transition);
+  }
+  .welcome-examples button:hover::after {
+    opacity: 1;
+    color: var(--gold-text);
+  }
+
+  /* ── Message Bubbles ── */
+  .msg { margin-bottom: 16px; }
+  .msg.user {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .msg.user .bubble {
+    background: transparent;
+    border: 1px solid var(--border-light);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 0;
+    max-width: 80%;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .msg.assistant .bubble:empty { display: none; }
+  
+  .msg.assistant .bubble {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    padding: 32px;
+    font-size: 15px;
+    line-height: 1.9;
+    color: var(--text-primary);
+    min-height: 20px;
+  }
+  .msg.assistant .bubble h3 {
+    font-family: var(--font-serif);
+    font-size: 20px;
+    font-weight: 400;
+    margin: 32px 0 12px;
+    color: var(--gold-text);
+  }
+  .msg.assistant .bubble p { margin-bottom: 12px; }
+  .msg.assistant .bubble p:last-child { margin-bottom: 0; }
+  .msg.assistant .bubble strong { color: #fff; font-weight: 600; }
+  .msg.assistant .bubble em { color: var(--text-secondary); }
+  .msg.assistant .bubble code {
+    background: var(--bg-tertiary);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--gold-text);
+  }
+  .msg.assistant .bubble pre {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    overflow-x: auto;
+    margin: 8px 0;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .msg.assistant .bubble ul, .msg.assistant .bubble ol {
+    margin: 8px 0;
+    padding-left: 24px;
+  }
+  .msg.assistant .bubble li { margin-bottom: 4px; }
+
+  /* §-reference inline */
+  .para-ref {
+    color: var(--gold-text);
+    background: var(--gold-light);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition);
+    white-space: nowrap;
+    font-size: 13px;
+  }
+  .para-ref:hover { background: rgba(200,164,78,0.2); }
+
+  /* Source citation [1], [2] inline */
+  .source-ref {
+    color: var(--accent);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0 2px;
+    transition: color var(--transition);
+    font-size: 13px;
+  }
+  .source-ref:hover { color: var(--accent-hover); text-decoration: underline; }
+
+  /* Message meta */
+  .msg-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .msg-meta .model-badge {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+  }
+
+  /* Streaming cursor */
+  .streaming-cursor::after {
+    content: '▌';
+    animation: blink 1s step-end infinite;
+    color: var(--accent);
+    margin-left: 2px;
+  }
   @keyframes blink { 50% { opacity: 0; } }
 
-  .result-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; transition: border-color 0.15s; cursor: default; }
-  .result-card:hover { border-color: #2a2d38; }
-  .result-card.pinned { border-color: var(--accent); background: rgba(59,130,246,0.06); }
-  .result-card .r-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px; gap: 12px; }
-  .result-card .r-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
-  .r-badge.gesetz { background: rgba(59,130,246,0.15); color: #60a5fa; }
-  .r-badge.urteil { background: rgba(139,92,246,0.15); color: #a78bfa; }
-  .result-card .r-title { font-weight: 600; font-size: 14px; color: #fff; }
-  .result-card .r-scores { display: flex; gap: 10px; font-size: 11px; }
-  .result-card .r-scores span { color: var(--text-dim); }
-  .result-card .r-scores b { color: var(--amber); }
-  .result-card .r-scores b.final { color: var(--green); font-size: 13px; }
+  /* ── Source Cards (below assistant message) ── */
+  .sources-section {
+    margin: 0 0 20px;
+    padding-left: 24px;
+  }
+  .sources-section .src-header {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .src-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .src-card:hover { border-color: var(--border-light); }
+  .src-card .src-num {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--accent-light);
+    color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .src-card .src-info { flex: 1; min-width: 0; }
+  .src-card .src-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .src-card .src-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    gap: 8px;
+    margin-top: 1px;
+  }
+  .src-card .src-score {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .src-card .src-score b { color: var(--green); }
+  .src-card .src-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .src-badge.gesetz { background: rgba(59,110,165,0.15); color: var(--accent); }
+  .src-badge.urteil { background: rgba(200,164,78,0.15); color: var(--gold-text); }
 
-  /* Expando text */
-  .result-card .r-text { font-size: 13px; color: var(--text); margin-top: 8px; line-height: 1.7; max-height: 120px; overflow: hidden; position: relative; transition: max-height 0.3s ease; }
-  .result-card .r-text.expanded { max-height: none; }
-  .result-card .r-text::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, var(--panel)); pointer-events: none; }
-  .result-card .r-text.expanded::after { display: none; }
-  .r-text-toggle { display: inline-block; font-size: 12px; color: var(--accent); cursor: pointer; margin-top: 4px; user-select: none; }
-  .r-text-toggle:hover { text-decoration: underline; }
+  /* ── Loading / Error ── */
+  .loading-msg {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .loading-msg .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-  .result-card .r-meta { font-size: 11px; color: var(--text-dim); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
+  /* ── Terminal Status (in-chat, below user msg) ── */
+  .term-status {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0 4px 0;
+    margin-left: 4px;
+  }
+  .term-status.visible { display: flex; }
+  .term-spinner {
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  .term-text {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .term-text .term-prefix { color: var(--text-muted); opacity: 0.5; }
+  .term-text .term-action { color: var(--text-secondary); }
+  .term-done { color: var(--green) !important; }
+  .error-msg {
+    padding: 20px;
+    text-align: center;
+    color: var(--red);
+    font-size: 13px;
+    background: var(--red-light);
+    border: 1px solid rgba(217,48,37,0.2);
+    border-radius: var(--radius);
+    margin: 10px 0;
+  }
 
-  .loading-pulse { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; color: var(--text-dim); animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+  /* ── Input Area ── */
+  .input-area {
+    padding: 32px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+  }
+  .input-inner {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  .input-row {
+    display: flex;
+    gap: 0;
+    align-items: center;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+  }
+  .input-row textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: var(--text-primary);
+    padding: 18px 20px;
+    font-size: 14px;
+    font-family: var(--font-sans);
+    resize: none;
+    min-height: 56px;
+    max-height: 200px;
+    outline: none;
+    line-height: 1.5;
+  }
+  .input-actions {
+    display: flex;
+    gap: 0;
+    flex-shrink: 0;
+    height: 56px;
+  }
+  .input-actions button {
+    width: 56px; height: 56px;
+    border: none;
+    border-left: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all var(--transition);
+  }
+  .input-actions button:hover {
+    background: var(--bg-hover);
+    color: #fff;
+  }
+  .input-actions .send-btn {
+    background: #000;
+    color: #fff;
+  }
+  .input-actions .send-btn:disabled {
+    opacity: 0.1;
+    cursor: not-allowed;
+  }
+  .input-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 0 4px;
+  }
+  .input-footer .file-name {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    color: var(--accent);
+  }
 
-  .pipeline-trace { font-size: 11px; color: var(--text-dim); padding: 4px 0; display: flex; gap: 8px; align-items: center; margin-top: 6px; }
-  .pipeline-trace .stage { background: var(--bg); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); }
-  .pipeline-trace .stage .t { color: var(--amber); }
+  /* ═══════════════════════════════════════════
+     SOURCE DETAIL PANEL (slide-in)
+     ═══════════════════════════════════════════ */
+  .source-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 30;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .source-overlay.open { opacity: 1; pointer-events: auto; }
+  .source-panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: 520px; max-width: 90vw;
+    height: 100vh;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border);
+    z-index: 40;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.3);
+  }
+  .source-panel.open { transform: translateX(0); }
+  .source-panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .source-panel-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    flex: 1;
+  }
+  .source-panel-header .close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    transition: color var(--transition);
+  }
+  .source-panel-header .close-btn:hover { color: var(--text-primary); }
+  .source-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .source-panel-body .sp-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .source-panel-body .sp-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+  .source-panel-body .sp-text {
+    font-size: 14px;
+    line-height: 1.9;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+  }
+  .source-panel-body .sp-text mark {
+    background: var(--gold-light);
+    color: var(--gold-text);
+    padding: 0 4px;
+    border-radius: 2px;
+  }
+  .source-panel-body .sp-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .source-panel-body .sp-actions a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .source-panel-body .sp-related {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .source-panel-body .sp-related h4 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .source-panel-body .sp-related-item {
+    padding: 6px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color var(--transition);
+  }
+  .source-panel-body .sp-related-item:hover { color: var(--accent); }
 
-  /* ── Right: Tech Panel ── */
-  .tech-panel { background: var(--panel); display: flex; flex-direction: column; overflow-y: auto; padding: 20px; gap: 20px; }
-  .tech-panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); margin-bottom: 10px; }
-  .tech-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-  .tech-card h4 { font-size: 13px; color: #fff; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
-  .tech-card h4 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-  .dot.blue { background: var(--accent); }
-  .dot.green { background: var(--green); }
-  .dot.amber { background: var(--amber); }
-  .dot.purple { background: var(--purple); }
-  .tech-card p { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
-  .tech-card .metric { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
-  .tech-card .metric span:first-child { color: var(--text-dim); }
-  .tech-card .metric span:last-child { color: #fff; font-weight: 600; }
+  /* ═══════════════════════════════════════════
+     RESPONSIVE
+     ═══════════════════════════════════════════ */
+  @media (max-width: 860px) {
+    .sidebar {
+      position: fixed;
+      left: 0; top: 0;
+      z-index: 25;
+      transform: translateX(-100%);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-toggle { display: block; }
+    .chat-header .hamburger { display: block; }
+    .msg.user .bubble { max-width: 85%; }
+    .messages-inner { padding: 16px 16px 8px; }
+    .input-area { padding: 10px 12px 14px; }
+    .source-panel { width: 100vw; max-width: 100vw; }
+    .chat-header { padding: 12px 16px; }
+    .welcome { padding: 40px 10px 30px; }
+  }
+  @media (min-width: 861px) {
+    .sidebar-toggle { display: none !important; }
+    .hamburger { display: none !important; }
+  }
 
-  /* ── Pipeline viz ── */
-  .pipeline-viz { display: flex; flex-direction: column; gap: 6px; }
-  .pipe-step { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); font-size: 12px; }
-  .pipe-step .step-num { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; flex-shrink: 0; }
-  .pipe-step .step-num.s1 { background: rgba(59,130,246,0.2); color: #60a5fa; }
-  .pipe-step .step-num.s2 { background: rgba(245,158,11,0.2); color: #f59e0b; }
-  .pipe-step .step-num.s3 { background: rgba(34,197,62,0.2); color: #22c55e; }
-  .pipe-step .step-num.s4 { background: rgba(139,92,246,0.2); color: #a78bfa; }
-  .pipe-step .step-label { font-weight: 600; color: #fff; }
-  .pipe-step .step-detail { color: var(--text-dim); font-size: 11px; }
-  .pipe-arrow { text-align: center; color: var(--text-dim); font-size: 10px; }
-
-  /* ── Knowledge Graph mini ── */
-  .kg-mini { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-  .kg-mini .node { display: inline-block; background: var(--panel); border: 1px solid var(--border); padding: 3px 8px; border-radius: 12px; font-size: 11px; margin: 2px; color: var(--text); }
-  .kg-mini .edge { color: var(--accent); margin: 0 2px; font-size: 10px; }
-
-  /* ── Live query info ── */
-  .query-info { font-size: 11px; color: var(--text-dim); }
-  .query-info b { color: var(--green); }
-  .query-info .detected { color: var(--amber); }
-
-  .footer { font-size: 10px; color: var(--text-dim); text-align: center; padding: 8px; border-top: 1px solid var(--border); }
+  /* ═══════════════════════════════════════════
+     UTILITY
+     ═══════════════════════════════════════════ */
+  .hidden { display: none !important; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">
-    <h1>LEX</h1>
-    <span class="badge">DEMO</span>
-  </div>
-  <div class="stats">
-    <span>📚 <b>12.766</b> Docs</span>
-    <span>⚖️ <b>44</b> Gesetze</span>
-    <span>🏛️ <b>230</b> Urteile</span>
-    <span>🖥️ <b>T4 GPU</b></span>
-  </div>
-</header>
 
-<main>
-  <!-- LEFT -->
-  <div class="search-col">
-    <div class="search-bar">
-      <div class="mode-tabs">
-        <button class="mode-tab active" data-mode="search" onclick="setMode('search')">🔍 Suchen</button>
-        <button class="mode-tab" data-mode="ask" onclick="setMode('ask')">🤖 Fragen</button>
-      </div>
-      <form onsubmit="handleSubmit(event)">
-        <input type="text" id="query" placeholder="Rechtsfrage oder §-Referenz eingeben…" autofocus>
-        <button type="submit" id="search-btn">Suchen</button>
-      </form>
-      <div class="examples">
-        <button onclick="quickSearch('Was besagt § 242 BGB?')">§ 242 BGB</button>
-        <button onclick="quickSearch('Wann ist eine Kündigung wirksam?')">Kündigung</button>
-        <button onclick="quickSearch('Was gilt bei Sachmängeln nach Kaufrecht?')">Sachmängel</button>
-        <button onclick="quickSearch('Wie ist Diebstahl im StGB definiert?')">Diebstahl</button>
-        <button onclick="quickSearch('Welche Pflichten hat ein GmbH-Geschäftsführer?')">GmbH</button>
-        <button onclick="quickSearch('BGH Zivilsenat Mietmangel Rücktritt')">BGH Mietrecht</button>
-      </div>
+<!-- ═══ OVERLAY (mobile sidebar / source panel) ═══ -->
+<div class="source-overlay" id="sourceOverlay"></div>
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">LX</div>
+    <div class="sidebar-brand">
+      LEX
+      <small>Juristischer KI-Assistent</small>
     </div>
-    <div class="results-area" id="results">
-      <div class="empty" id="empty-state">
-        <h2>LEX — Hybride Rechtssuche</h2>
-        <p>12.152 Paragraphen + 230 BGH/BVerfG-Urteile durchsuchbar mit bge-m3 Embeddings, Weighted Fusion und Cross-Encoder Reranking.</p>
-        <div class="pipeline-trace" style="justify-content:center;margin-top:16px;">
-          <span class="stage">🔍 Query</span> →
-          <span class="stage">🧠 bge-m3</span> →
-          <span class="stage">⚡ Fusion</span> →
-          <span class="stage">🎯 Reranker</span> →
-          <span class="stage">📋 Top-K</span>
-        </div>
-      </div>
-    </div>
+    <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Sidebar schließen">✕</button>
   </div>
 
-  <!-- RIGHT: Tech Panel -->
-  <div class="tech-panel" id="tech-panel">
-    <div>
-      <h3>⚙️ Pipeline</h3>
-      <div class="pipeline-viz">
-        <div class="pipe-step">
-          <span class="step-num s1">1</span>
-          <div>
-            <div class="step-label">Query Embedding</div>
-            <div class="step-detail">BAAI/bge-m3 · 1024-dim dense + learned sparse</div>
-          </div>
+  <div class="sidebar-section">
+    <span>Chat-Verlauf</span>
+    <button onclick="newChat()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">+ Neu</button>
+  </div>
+  <div class="sidebar-scroll">
+    <ul class="history-list" id="historyList">
+      <li class="history-empty" id="historyEmpty">
+        Noch keine Unterhaltungen.<br>
+        Stelle eine Rechtsfrage, um zu beginnen.
+      </li>
+    </ul>
+  </div>
+
+  <div class="sidebar-section case">
+    <span>Aktueller Fall</span>
+    <button onclick="clearCase()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px;font-family:inherit;padding:0;">✕</button>
+  </div>
+  <div class="case-input">
+    <textarea id="caseTextarea" placeholder="Mandantenkontext eingeben oder einfügen …&#10;z. B. 'Mandant ist GmbH-Geschäftsführer,&#10;Insolvenzantrag wurde gestellt…'" oninput="updateCase()"></textarea>
+  </div>
+  <div class="case-active" id="caseActive">
+    <span>📋</span>
+    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="caseLabel">Fall aktiv</span>
+    <button class="clear-case" onclick="clearCase()">✕</button>
+  </div>
+
+  <div class="sidebar-footer">
+    <span>📚 <b id="statDocs">-</b></span>
+    <span>⚖️ <b id="statLaws">-</b></span>
+    <span>🏛️ <b id="statCourts">-</b></span>
+  </div>
+</aside>
+
+<!-- ═══ MAIN CHAT AREA ═══ -->
+<main class="chat-area">
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="Menü">☰</button>
+      <div class="title-area">
+        <h2 id="chatTitle">Neue Recherche</h2>
+        <small id="chatSubtitle">Juristische Suche · DeepSeek / Claude</small>
+      </div>
+    </div>
+    <div class="chat-header-actions">
+      <button onclick="toggleDocs()" title="Dokumentation & Rechtsbestand">📖 Docs</button>
+      <button onclick="exportChat()" title="Antwort exportieren">📥 Export</button>
+      <button onclick="newChat()" title="Neue Unterhaltung">✕ Neu</button>
+    </div>
+...
+<!-- ═══ DOCS MODAL ═══ -->
+<div class="source-overlay" id="docsOverlay" onclick="toggleDocs()"></div>
+<div class="source-panel" id="docsPanel">
+  <div class="source-panel-header">
+    <h3>Dokumentation & Rechtsbestand</h3>
+    <button class="close-btn" onclick="toggleDocs()">✕</button>
+  </div>
+  <div class="source-panel-body">
+    <div class="sp-title">LEX — Architektur & Methodik</div>
+    <div class="sp-sub">Hybrid-RAG (Retrieval-Augmented Generation) System</div>
+    
+    <div class="sp-text">
+      LEX basiert auf einem hochspezialisierten RAG-System, das für die deutsche Rechtssprechung optimiert wurde. Im Gegensatz zu Standard-Modellen nutzt LEX eine hybride Infrastruktur:
+
+      <h4 style="margin: 20px 0 10px; color: var(--gold-text);">1. Rechtsbestand (Datenbasis)</h4>
+      Das System verfügt über einen Live-Index von aktuell <strong>17.024 Dokumenten</strong>:
+      <ul>
+        <li><strong>Bundesrecht:</strong> Volle Abdeckung von 72 Gesetzen (BGB, UWG, TDDDG, InsO, GmbHG, StGB, UrhG, KSchG etc.).</li>
+        <li><strong>Rechtsprechung:</strong> Über 400 Leitsatz-Entscheidungen der obersten Bundesgerichte (BGH, BVerfG, BAG, BSG).</li>
+        <li><strong>Update-Zyklus:</strong> Wöchentliches Scraping direkt von gesetze-im-internet.de.</li>
+      </ul>
+
+      <h4 style="margin: 20px 0 10px; color: var(--gold-text);">2. Hybride Suche</h4>
+      Um juristische Präzision zu gewährleisten, kombiniert LEX zwei Suchverfahren:
+      <ul>
+        <li><strong>Vektor-Suche (Dense):</strong> Erkennt semantische Zusammenhänge (z.B. findet "Mangel" bei der Suche nach "kaputt").</li>
+        <li><strong>Lexikalische Suche (Sparse):</strong> Findet exakte juristische Fachbegriffe und Paragraphenketten.</li>
+        <li><strong>Reranking:</strong> Ein spezialisiertes Cross-Encoder Modell bewertet die 15 besten Treffer nach juristischer Relevanz neu.</li>
+      </ul>
+
+      <h4 style="margin: 20px 0 10px; color: var(--gold-text);">3. Wissens-Graph</h4>
+      LEX erkennt Querverweise zwischen Paragraphen automatisch und baut einen Wissens-Graphen auf. Dies ermöglicht es dem System, verwandte Normen vorzuschlagen, auch wenn diese nicht explizit in der Frage vorkommen.
+
+      <h4 style="margin: 20px 0 10px; color: var(--gold-text);">4. KI-Infrastruktur</h4>
+      Das System nutzt ein Failover-Cluster zwischen <strong>DeepSeek-V3</strong> und <strong>Claude 3.5 Sonnet</strong>, um höchste Verfügbarkeit und logische Tiefe bei der juristischen Subsumtion zu garantieren.
+    </div>
+
+    <div class="disclaimer" style="margin-top: 30px; border-left: 2px solid var(--gold);">
+      <strong>Wichtiger Hinweis:</strong> Dieses System dient der Unterstützung juristischer Facharbeit. Es ersetzt keine Rechtsberatung durch einen zugelassenen Rechtsanwalt. Die Haftung für die Richtigkeit der KI-generierten Texte ist ausgeschlossen.
+    </div>
+  </div>
+</div>
+  </div>
+
+  <!-- Messages -->
+  <div class="messages" id="messages">
+    <div class="messages-inner" id="messagesInner">
+      <!-- Welcome Screen -->
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">LX</div>
+        <h1>Willkommen bei LEX</h1>
+        <p>
+          Der hybride juristische Suchassistent für das deutsche Bundesrecht.
+          Durchsuche <b id="welcomeDocs">16.500+</b> Paragraphen aus <b id="welcomeLaws">72</b> Gesetzen
+          und <b id="welcomeCourts">398</b> Urteile der obersten Bundesgerichte.
+        </p>
+        <div class="disclaimer">
+          <strong>⚠️ Hinweis:</strong> LEX ist ein KI-Assistent, kein Rechtsanwalt.
+          Die bereitgestellten Informationen sind keine Rechtsberatung.
+          Für eine verbindliche rechtliche Beurteilung konsultieren Sie bitte einen Rechtsanwalt.
         </div>
-        <div class="pipe-arrow">▼</div>
-        <div class="pipe-step">
-          <span class="step-num s2">2</span>
-          <div>
-            <div class="step-label">Weighted Fusion</div>
-            <div class="step-detail">Dense 0.7 + Sparse 0.3 · min-max normalized</div>
-          </div>
-        </div>
-        <div class="pipe-arrow">▼</div>
-        <div class="pipe-step">
-          <span class="step-num s3">3</span>
-          <div>
-            <div class="step-label">Cross-Encoder Reranker</div>
-            <div class="step-detail">BAAI/bge-reranker-v2-m3 · joint (query, doc) scoring</div>
-          </div>
-        </div>
-        <div class="pipe-arrow">▼</div>
-        <div class="pipe-step">
-          <span class="step-num s4">4</span>
-          <div>
-            <div class="step-label">LLM Answer (Optional)</div>
-            <div class="step-detail">DeepSeek / Claude · LEX/JURA persona · mit Quellen</div>
-          </div>
+        <div class="welcome-examples">
+          <button onclick="quickSearch('Darf ein Online-Händler Bestandskunden per E-Mail über ähnliche Produkte informieren (§ 7 UWG) und gleichzeitig Retargeting-Pixel (TDDDG) ohne explizite Einwilligung einsetzen?')">
+            <span>E-Mail-Marketing & Retargeting</span>
+          </button>
+          <button onclick="quickSearch('Ein GmbH-Geschäftsführer erkennt die drohende Zahlungsunfähigkeit. Welche Fristen gelten für den Insolvenzantrag nach § 15a InsO und welche Haftungsrisiken bestehen nach GmbHG?')">
+            <span>Insolvenzantragspflicht & Haftung</span>
+          </button>
+          <button onclick="quickSearch('Ist eine ordentliche Kündigung während einer krankheitsbedingten Arbeitsunfähigkeit wirksam? Berücksichtige die Voraussetzungen des KSchG und die aktuelle BGH/BAG-Rechtsprechung.')">
+            <span>Kündigung bei Krankheit</span>
+          </button>
+          <button onclick="quickSearch('Ein Käufer entdeckt 14 Monate nach dem Kauf eines Elektronikartikels einen Defekt. Wer trägt die Beweislast für den Mangel bei Gefahrübergang gemäß § 477 BGB (Verbrauchergüterkauf)?')">
+            <span>Beweislastumkehr Sachmangel</span>
+          </button>
+          <button onclick="quickSearch('Unter welchen Voraussetzungen ist vergleichende Werbung gegenüber einem Mitbewerber zulässig? Analysiere § 6 UWG im Kontext einer aktuellen Marketingkampagne.')">
+            <span>Zulässigkeit vergleichender Werbung</span>
+          </button>
+          <button onclick="quickSearch('Ein Unternehmen nutzt Stock-Fotos auf seiner Website, deren Lizenz abgelaufen ist. Welche Ansprüche hat der Urheber auf Schadensersatz und Unterlassung nach dem UrhG?')">
+            <span>Urheberrechtsverletzung Bildrechte</span>
+          </button>
         </div>
       </div>
     </div>
+  </div>
 
-    <div>
-      <h3>🔬 Modells</h3>
-      <div class="tech-card">
-        <h4><span class="dot blue"></span> Embedding</h4>
-        <p>BAAI/bge-m3 (FlagEmbedding) — 2.2GB, 1024-dim dense + learned sparse vectors. Multi-lingual, optimiert für semantische Ähnlichkeit.</p>
-        <div class="metric"><span>Dimension</span><span>1024-d</span></div>
-        <div class="metric"><span>Sparse</span><span>Learned (lexical)</span></div>
+  <!-- Input -->
+  <div class="input-area">
+    <div class="input-inner">
+      <div class="input-row">
+        <textarea id="queryInput" rows="1" placeholder="Stelle eine Rechtsfrage oder gib einen Paragraphen ein…" onkeydown="onInputKeydown(event)" oninput="autoResize(this)"></textarea>
+        <div class="input-actions">
+          <button onclick="document.getElementById('fileInput').click()" title="Datei anhängen (PDF/DOCX)">📎</button>
+          <button class="send-btn" id="sendBtn" onclick="handleSubmit()" title="Absenden">➤</button>
+        </div>
       </div>
-      <div class="tech-card" style="margin-top:8px;">
-        <h4><span class="dot amber"></span> Reranker</h4>
-        <p>BAAI/bge-reranker-v2-m3 — 1.1GB cross-encoder. Joint encoding von (query, doc) pairs für präzises Re-Ranking.</p>
-        <div class="metric"><span>Normalisierung</span><span>Sigmoid [0,1]</span></div>
+      <div class="input-footer">
+        <span>LEX durchsucht Gesetze + Urteile mit hybridem RAG</span>
+        <span class="file-name" id="fileName"></span>
       </div>
-      <div class="tech-card" style="margin-top:8px;">
-        <h4><span class="dot green"></span> Vector DB</h4>
-        <p>Qdrant (local mode, SQLite) — COSINE distance, named sparse vectors, 12.766 Punkte.</p>
-      </div>
-      <div class="tech-card" style="margin-top:8px;">
-        <h4><span class="dot purple"></span> Knowledge Graph</h4>
-        <p>NetworkX DiGraph — regex §-Verweis parser, 364K edges zwischen Paragraphen.</p>
-      </div>
-    </div>
-
-    <div>
-      <h3>📊 Live Stats</h3>
-      <div id="live-stats">Wird bei erster Suche geladen…</div>
-      <div class="query-info" id="query-diag" style="margin-top:8px;"></div>
-    </div>
-
-    <div class="footer">
-      LEX Legal RAG · Modal T4 GPU · Gesetze + BGH/BVerfG Urteile
     </div>
   </div>
 </main>
 
+<!-- ═══ SOURCE DETAIL PANEL ═══ -->
+<div class="source-panel" id="sourcePanel">
+  <div class="source-panel-header">
+    <h3 id="sourcePanelTitle">Quelle</h3>
+    <button class="close-btn" onclick="closeSourcePanel()">✕</button>
+  </div>
+  <div class="source-panel-body" id="sourcePanelBody">
+    <div class="sp-title" id="spTitle"></div>
+    <div class="sp-sub" id="spSub"></div>
+    <div class="sp-text" id="spText"></div>
+    <div class="sp-actions" id="spActions"></div>
+    <div class="sp-related" id="spRelated">
+      <h4>🏛  Wissen-Graph — Verweise</h4>
+      <div id="spRelatedList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden file input -->
+<input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="handleFileUpload(event)">
+
 <script>
-  let statsLoaded = false;
-  let currentMode = 'search';
+/* ═══════════════════════════════════════════
+   TERMINAL STATUS (real progress)
+   ═══════════════════════════════════════════ */
+let _termEl = null;
 
-  async function loadStats() {
-    if (statsLoaded) return;
-    try {
-      const r = await fetch('/api/legal/stats');
-      const d = await r.json();
-      document.getElementById('live-stats').innerHTML =
-        `<div style="display:flex;justify-content:space-between;font-size:12px;">` +
-        `<span>Gesamtdocs</span><b>${d.total_docs.toLocaleString()}</b>` +
-        `</div>`;
-      statsLoaded = true;
-    } catch(e) {}
+function setTerminal(action) {
+  const inner = document.getElementById('messagesInner');
+  // Remove any existing terminal
+  if (_termEl) _termEl.remove();
+  // Create terminal element in the message flow
+  const div = document.createElement('div');
+  div.className = 'term-status visible';
+  div.innerHTML = `<div class="term-spinner"></div><div class="term-text"><span class="term-prefix">$</span> <span class="term-action">${escHtml(action)}</span></div>`;
+  inner.appendChild(div);
+  _termEl = div;
+  scrollToBottom();
+}
+
+function hideTerminal() {
+  if (_termEl) { _termEl.remove(); _termEl = null; }
+  const existing = document.querySelector('.term-status');
+  if (existing) existing.remove();
+}
+
+/* ═══════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════ */
+const state = {
+  chats: JSON.parse(localStorage.getItem('lex_chats') || '[]'),
+  currentChatId: null,
+  isStreaming: false,
+  hasAskedInCurrentChat: false,
+  docCount: null,
+};
+
+/* ═══════════════════════════════════════════
+   MARKDOWN RENDERER (lightweight)
+   ═══════════════════════════════════════════ */
+function renderMarkdown(text) {
+  if (!text) return '';
+  let html = escHtml(text);
+
+  // §-references: § 242, §242, § 242a, §§ 242-244
+  html = html.replace(/§{1,2}\s*\d+[a-z]?(?:\s*(?:,|\s+|und|bis)\s*§{0,2}\s*\d+[a-z]?)*/g, match =>
+    `<span class="para-ref">${match}</span>`
+  );
+
+  // Source references [1], [2,3], [1-3]
+  html = html.replace(/\[(\d+(?:[,&\s]\s*\d+)*(?:\s*[-–]\s*\d+)?)\]/g, (match, nums) =>
+    `<span class="source-ref" onclick="openSourceByRef('${nums}')">[${nums}]</span>`
+  );
+
+  // Code blocks
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+    `<pre><code>${escHtml(code)}</code></pre>`
+  );
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Bold
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+  // Italic
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  // Line breaks
+  html = html.replace(/\n/g, '<br>');
+
+  return html;
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ═══════════════════════════════════════════
+   CHAT MANAGEMENT
+   ═══════════════════════════════════════════ */
+function newChat() {
+  state.currentChatId = Date.now().toString();
+  state.hasAskedInCurrentChat = false;
+  document.getElementById('chatTitle').textContent = 'Neue Recherche';
+  document.getElementById('welcome').classList.remove('hidden');
+  // Remove all messages except welcome
+  const inner = document.getElementById('messagesInner');
+  inner.querySelectorAll('.msg, .sources-section, .error-msg, .loading-msg').forEach(el => el.remove());
+  // Reset welcome
+  document.getElementById('welcome').classList.remove('hidden');
+  document.getElementById('queryInput').value = '';
+  document.getElementById('queryInput').focus();
+  renderHistory();
+  saveChats();
+}
+
+function saveChats() {
+  localStorage.setItem('lex_chats', JSON.stringify(state.chats));
+}
+
+function getCurrentChat() {
+  return state.chats.find(c => c.id === state.currentChatId);
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  const empty = document.getElementById('historyEmpty');
+  if (state.chats.length === 0) {
+    list.innerHTML = '<li class="history-empty" id="historyEmpty">Noch keine Unterhaltungen.<br>Stelle eine Rechtsfrage, um zu beginnen.</li>';
+    return;
   }
+  let html = '';
+  const sorted = [...state.chats].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+  sorted.forEach(c => {
+    const title = c.title || c.messages?.find(m => m.role === 'user')?.content?.substring(0, 50) || 'Neue Recherche';
+    const active = c.id === state.currentChatId ? 'active' : '';
+    html += `<li>
+      <button class="history-item ${active}" onclick="switchChat('${c.id}')">
+        <span class="icon">⚖️</span>
+        <span class="title">${escHtml(title)}</span>
+        <button class="delete-btn" onclick="event.stopPropagation();deleteChat('${c.id}')" title="Löschen">✕</button>
+      </button>
+    </li>`;
+  });
+  list.innerHTML = html;
+}
 
-  function setMode(mode) {
-    currentMode = mode;
-    document.querySelectorAll('.mode-tab').forEach(t => {
-      t.classList.toggle('active', t.dataset.mode === mode);
-    });
-    document.getElementById('search-btn').textContent = mode === 'ask' ? 'Fragen' : 'Suchen';
-    document.getElementById('query').placeholder = mode === 'ask'
-      ? 'Stelle deine Rechtsfrage…'
-      : 'Rechtsfrage oder §-Referenz eingeben…';
+function switchChat(id) {
+  const chat = state.chats.find(c => c.id === id);
+  if (!chat) return;
+  state.currentChatId = id;
+  state.hasAskedInCurrentChat = true;
+  document.getElementById('chatTitle').textContent = chat.title || 'Recherche';
+  renderChatHistory(chat);
+  renderHistory();
+}
+
+function deleteChat(id) {
+  state.chats = state.chats.filter(c => c.id !== id);
+  saveChats();
+  if (state.currentChatId === id) {
+    newChat();
+  } else {
+    renderHistory();
   }
+}
 
-  function quickSearch(q) {
-    document.getElementById('query').value = q;
-    handleSubmit(new Event('submit'));
+function renderChatHistory(chat) {
+  const inner = document.getElementById('messagesInner');
+  // Remove welcome, old messages, etc.
+  inner.querySelectorAll('.msg, .sources-section, .error-msg, .loading-msg').forEach(el => el.remove());
+  document.getElementById('welcome').classList.add('hidden');
+
+  if (!chat.messages) return;
+  chat.messages.forEach((msg, idx) => {
+    if (msg.role === 'user') {
+      addUserMessage(msg.content, false);
+    } else if (msg.role === 'assistant') {
+      addAssistantMessage(msg.content, msg.sources || [], msg.model || '', false);
+    }
+  });
+}
+
+function addMessageToCurrentChat(role, content, sources, model) {
+  let chat = getCurrentChat();
+  if (!chat) {
+    chat = {
+      id: state.currentChatId,
+      title: content?.substring(0, 60) || 'Neue Recherche',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      messages: [],
+    };
+    state.chats.push(chat);
   }
+  if (role === 'user') {
+    chat.messages.push({ role, content, timestamp: Date.now() });
+    // Generate title from first user message
+    if (chat.messages.filter(m => m.role === 'user').length === 1) {
+      chat.title = content?.substring(0, 60) || 'Neue Recherche';
+      document.getElementById('chatTitle').textContent = chat.title;
+    }
+  } else if (role === 'assistant') {
+    chat.messages.push({ role, content, sources: sources || [], model: model || '', timestamp: Date.now() });
+  }
+  chat.updatedAt = Date.now();
+  saveChats();
+  renderHistory();
+}
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (currentMode === 'ask') {
-      await ask();
+/* ═══════════════════════════════════════════
+   UI: ADD MESSAGES
+   ═══════════════════════════════════════════ */
+function addUserMessage(text, animate = true) {
+  const inner = document.getElementById('messagesInner');
+  document.getElementById('welcome').classList.add('hidden');
+  const div = document.createElement('div');
+  div.className = 'msg user';
+  div.innerHTML = `<div class="bubble">${escHtml(text)}</div>`;
+  inner.appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function addAssistantMessage(text, sources, model, streaming = false) {
+  const inner = document.getElementById('messagesInner');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.id = streaming ? 'streaming-msg' : '';
+
+  let modelBadge = model ? `<span class="model-badge">${escHtml(model)}</span>` : '';
+
+  div.innerHTML = `
+    <div class="bubble">
+      <div class="${streaming ? 'streaming-cursor' : ''}" id="msgBody-${streaming ? 'stream' : Date.now()}">${renderMarkdown(text)}</div>
+    </div>
+    <div class="msg-meta">
+      ${modelBadge}
+      <span>LEX · hybride Suche</span>
+    </div>`;
+  inner.appendChild(div);
+  scrollToBottom();
+
+  // If not streaming, add source cards below
+  if (!streaming && sources && sources.length > 0) {
+    window._lastSources = sources;
+    const sourceDiv = document.createElement('div');
+    sourceDiv.className = 'sources-section';
+    sourceDiv.innerHTML = `<div class="src-header">Quellen</div>${sources.map((s, i) => renderSourceCard(s, i + 1)).join('')}`;
+    inner.appendChild(sourceDiv);
+    scrollToBottom();
+  }
+  return div;
+}
+
+function renderSourceCard(source, idx) {
+  const typ = source.typ || 'gesetz';
+  const badgeClass = typ === 'urteil' ? 'urteil' : 'gesetz';
+  // Handle both citation (streaming) and raw search result formats
+  const abk = source.abkürzung || source.gesetz || '';
+  const para = source.paragraph || '';
+  const titel = source.paragraph_titel || source.titel || '';
+  const score = source.rerank_score || source.score || 0;
+  const badgeText = (typ === 'urteil' && source.gericht) ? 'Urteil' : (abk || 'Gesetz');
+  const title = typ === 'urteil'
+    ? `${source.gericht || ''} ${source.aktenzeichen || ''}`
+    : `${abk} ${para} — ${titel}`;
+  const meta = typ === 'urteil'
+    ? `📅 ${source.datum || ''} · ${source.rechtsgebiet || ''}`
+    : `📂 ${source.rechtsgebiet || ''} · Stand: ${source.stand || '-'}`;
+
+  return `<div class="src-card" onclick="openSourcePanel(${idx - 1})">
+    <span class="src-num">${idx}</span>
+    <span class="src-badge ${badgeClass}">${badgeText}</span>
+    <div class="src-info">
+      <div class="src-title">${escHtml(title)}</div>
+      <div class="src-meta">${meta}</div>
+    </div>
+    <div class="src-score">Rerank <b>${score.toFixed(4)}</b></div>
+  </div>`;
+}
+
+function scrollToBottom() {
+  const messages = document.getElementById('messages');
+  requestAnimationFrame(() => { messages.scrollTop = messages.scrollHeight; });
+}
+
+/* ═══════════════════════════════════════════
+   STREAMING UPDATE
+   ═══════════════════════════════════════════ */
+let currentSources = [];
+let currentModel = '';
+
+function updateStreamingMessage(text) {
+  let msg = document.getElementById('streaming-msg');
+  const inner = document.getElementById('messagesInner');
+  
+  if (!msg) {
+    const div = document.createElement('div');
+    div.className = 'msg assistant';
+    div.id = 'streaming-msg';
+    div.innerHTML = `<div class="bubble"><div class="streaming-cursor" id="streamBody"></div></div>
+      <div class="msg-meta"><span class="model-badge" id="streamModelBadge">Analyse läuft...</span><span>LEX · hybride Suche</span></div>`;
+    inner.appendChild(div);
+    msg = div;
+  }
+  
+  const body = document.getElementById('streamBody');
+  if (body) {
+    if (text.trim()) {
+      body.innerHTML = renderMarkdown(text);
     } else {
-      await search();
+      body.innerHTML = '<span style="color:var(--text-muted);font-style:italic;">Erstelle juristisches Gutachten...</span>';
     }
   }
+  scrollToBottom();
+}
 
-  function toggleText(btn) {
-    const card = btn.closest('.result-card');
-    const textEl = card.querySelector('.r-text');
-    const isExpanded = textEl.classList.toggle('expanded');
-    btn.textContent = isExpanded ? '▲ Weniger' : '▼ Weiterlesen';
-  }
-
-  async function search() {
-    const q = document.getElementById('query').value.trim();
-    if (!q) return;
-
-    const btn = document.getElementById('search-btn');
-    const results = document.getElementById('results');
-    const diag = document.getElementById('query-diag');
-
-    btn.disabled = true;
-    results.innerHTML = '<div class="loading-pulse">⚡ Hybride Suche läuft…<br><small>bge-m3 Embedding → Weighted Fusion → Reranker</small></div>';
-    loadStats();
-
-    const t0 = performance.now();
-    try {
-      const resp = await fetch('/api/legal/search?q=' + encodeURIComponent(q) + '&top_k=7');
-      const data = await resp.json();
-      const elapsed = (performance.now() - t0).toFixed(0);
-
-      const hasPara = /§+\s*\d+/.test(q);
-      const lawMatch = q.match(/\b(BGB|StGB|HGB|ZPO|StPO|GG|VwVfG|AktG|GmbHG?|InsO|FamFG|BDSG|UrhG|MarkenG|PatG|BauGB|VwGO|AO|KStG|EStG|UStG|UmwG|WpHG|BetrVG|SGB|KSchG|BVerfGG|TKG|WEG|EGBGB)\b/gi);
-      const hasUrteilRef = /\b(BGH|BVerfG|Urteil|Beschluss|Senat)\b/i.test(q);
-
-      let diagHtml = `<b>${elapsed}ms</b> Latenz · ${data.count} Treffer`;
-      if (hasPara) diagHtml += ' · <span class="detected">📌 §-Pinning aktiv</span>';
-      if (lawMatch) diagHtml += ` · <span class="detected">⚖️ Filter: ${lawMatch.join(', ')}</span>`;
-      diag.innerHTML = diagHtml;
-
-      if (!data.results.length) {
-        results.innerHTML = '<div class="empty"><h2>Keine Treffer</h2><p>Andere Formulierung versuchen.</p></div>';
-        btn.disabled = false;
-        return;
+function finalizeStreamingMessage(text, sources, model) {
+  const msg = document.getElementById('streaming-msg');
+  if (msg) {
+    if (!text || !text.trim()) {
+      msg.remove();
+    } else {
+      const body = document.getElementById('streamBody');
+      if (body) {
+        body.classList.remove('streaming-cursor');
+        body.innerHTML = renderMarkdown(text);
       }
-
-      let html = '';
-      data.results.forEach((r, i) => {
-        const isPinned = r.score >= 1.0 && hasPara;
-        const typ = r.typ || 'gesetz';
-        const badgeClass = typ === 'urteil' ? 'urteil' : 'gesetz';
-        const badgeText = typ === 'urteil' ? '🏛️ ' + (r.gericht||'') + ' · ' + (r.aktenzeichen||'') : '📜 ' + (r.abkürzung||'') + ' ' + (r.paragraph||'');
-
-        const fusionScore = r.score || 0;
-        const rerankScore = r.rerank_score || fusionScore;
-
-        html += '<div class="result-card' + (isPinned ? ' pinned' : '') + '">' +
-          '<div class="r-header">' +
-            '<span class="r-badge ' + badgeClass + '">' + badgeText + '</span>' +
-            '<div class="r-scores">' +
-              '<span>Fusion <b>' + fusionScore.toFixed(3) + '</b></span>' +
-              (r.rerank_score !== undefined ? '<span>Rerank <b class="final">' + rerankScore.toFixed(4) + '</b></span>' : '') +
-            '</div>' +
-          '</div>';
-
-        if (r.paragraph_titel) {
-          html += '<div class="r-title">' + escHtml(r.paragraph_titel) + '</div>';
-        } else if (typ === 'urteil' && r.leitsatz) {
-          html += '<div class="r-title">' + escHtml(r.leitsatz.substring(0, 120)) + '…</div>';
-        }
-
-        const text = r.inhalt || r.volltext || '';
-        const needsToggle = text.length > 400;
-        html += '<div class="r-text' + (needsToggle ? '' : ' expanded') + '">' + escHtml(text) + '</div>';
-        if (needsToggle) {
-          html += '<span class="r-text-toggle" onclick="toggleText(this)">▼ Weiterlesen</span>';
-        }
-
-        html += '<div class="r-meta">';
-        if (r.rechtsgebiet) html += '<span>📂 ' + escHtml(r.rechtsgebiet) + '</span>';
-        if (r.datum) html += '<span>📅 ' + r.datum + '</span>';
-        if (r.stand) html += '<span>🔄 Stand: ' + r.stand + '</span>';
-        html += '</div>';
-
-        if (isPinned) html += '<div style="font-size:10px;color:#60a5fa;margin-top:4px;">📌 Exakter §-Treffer — an Position 1 gepinnt</div>';
-        html += '</div>';
-      });
-
-      results.innerHTML = html;
-    } catch(e) {
-      results.innerHTML = '<div class="empty"><h2>Fehler</h2><p>' + escHtml(e.message) + '</p></div>';
-    } finally {
-      btn.disabled = false;
+      const badge = document.getElementById('streamModelBadge');
+      if (badge && model) badge.textContent = model;
+      msg.id = '';
     }
   }
 
-  function renderSourceCards(citations, container) {
-    let html = '<div style="font-size:12px;color:var(--text-dim);margin:-8px 0 8px;font-weight:600;">📄 Zugrunde liegende Quellen</div>';
-    citations.forEach(c => {
-      const text = c.text_preview || '';
-      const needsToggle = text.length > 400;
-      const url = c.url || '';
-      html += '<div class="result-card">' +
-        '<div class="r-header">' +
-          '<span class="r-badge gesetz">📜 ' + escHtml(c.gesetz || '') + ' ' + escHtml(c.paragraph || '') + '</span>' +
-          '<div class="r-scores"><span>Score <b class="final">' + (c.score || 0).toFixed(4) + '</b></span></div>' +
-        '</div>' +
-        (c.titel ? '<div class="r-title">' + escHtml(c.titel) + '</div>' : '') +
-        '<div class="r-text' + (needsToggle ? '' : ' expanded') + '">' + escHtml(text) + '</div>' +
-        (needsToggle ? '<span class="r-text-toggle" onclick="toggleText(this)">▼ Weiterlesen</span>' : '') +
-        (url ? '<div class="r-meta"><span>🔗 <a href="' + escHtml(url) + '" target="_blank" style="color:var(--accent);text-decoration:none;">Quelle öffnen</a></span></div>' : '') +
-        '</div>';
-    });
-    container.innerHTML = html;
+  // Add source cards
+  if (sources && sources.length > 0) {
+    const inner = document.getElementById('messagesInner');
+    const sourceDiv = document.createElement('div');
+    sourceDiv.className = 'sources-section';
+    sourceDiv.innerHTML = `<div class="src-header">Quellen</div>${sources.map((s, i) => renderSourceCard(s, i + 1)).join('')}`;
+
+    // Store sources globally for panel access
+    window._lastSources = sources;
+
+    inner.appendChild(sourceDiv);
+    scrollToBottom();
   }
+}
 
-  async function ask() {
-    const q = document.getElementById('query').value.trim();
-    if (!q) return;
+/* ═══════════════════════════════════════════
+   API: SEARCH / ASK
+   ═══════════════════════════════════════════ */
+async function handleSubmit() {
+  const input = document.getElementById('queryInput');
+  const q = input.value.trim();
+  if (!q || state.isStreaming) return;
 
-    const btn = document.getElementById('search-btn');
-    const results = document.getElementById('results');
-    const diag = document.getElementById('query-diag');
+  input.value = '';
+  autoResize(input);
+  state.hasAskedInCurrentChat = true;
 
-    btn.disabled = true;
-    loadStats();
+  // Add user message
+  addUserMessage(q);
 
-    results.innerHTML = `
-      <div class="llm-answer" id="answer-card">
-        <div class="a-header">
-          <h3>🤖 LEX antwortet</h3>
-          <span class="model-badge" id="stream-model">DeepSeek / Claude</span>
-          <span style="font-size:11px;color:var(--text-dim);margin-left:auto;" id="stream-time"></span>
-        </div>
-        <div class="a-body" id="answer-body"></div>
-        <div class="a-loading" id="answer-loading">
-          <div class="spinner"></div>
-          <span>Suche in Gesetzen…</span>
-        </div>
-        <div class="a-citations hidden" id="answer-citations"></div>
-      </div>
-      <div id="ask-results"></div>`;
+  // Show 3D orb loading
+  setTerminal('Durchsuche Index');
 
-    const t0 = performance.now();
-    let answerText = '';
-    let hasReceivedSearch = false;
+  // Save user message
+  addMessageToCurrentChat('user', q);
 
-    const es = new EventSource('/api/legal/ask/stream?q=' + encodeURIComponent(q) + '&top_k=5');
+  const sendBtn = document.getElementById('sendBtn');
+  sendBtn.disabled = true;
+  state.isStreaming = true;
+
+  // Build case context
+  const caseText = document.getElementById('caseTextarea').value.trim();
+  const queryWithCase = caseText
+    ? `[Mandantenkontext: ${caseText.substring(0, 500)}]\n\nFrage: ${q}`
+    : q;
+
+  let answerText = '';
+  let sources = [];
+  let model = '';
+
+  try {
+    // Use streaming ask endpoint
+    const es = new EventSource('/api/legal/ask/stream?q=' + encodeURIComponent(queryWithCase) + '&top_k=5');
 
     es.addEventListener('search', (e) => {
       const data = JSON.parse(e.data);
-      const loading = document.getElementById('answer-loading');
-      if (loading) {
-        loading.innerHTML = '<div class="spinner"></div><span>LEX formuliert Antwort…</span>';
-      }
-      if (data.citations && data.citations.length > 0) {
-        renderSourceCards(data.citations, document.getElementById('ask-results'));
-      }
-      hasReceivedSearch = true;
+      sources = data.citations || [];
+      currentSources = sources;
+      window._lastSources = sources;
+
+      // Real progress
+      setTerminal('Bewerte Treffer');
+      setTimeout(() => {
+        hideTerminal();
+        updateStreamingMessage('');
+      }, 300);
     });
 
     es.addEventListener('token', (e) => {
       const token = JSON.parse(e.data);
       if (token) {
         answerText += token;
-        const body = document.getElementById('answer-body');
-        if (body) body.textContent = answerText;
+        updateStreamingMessage(answerText);
       }
     });
 
     es.addEventListener('done', (e) => {
       const data = JSON.parse(e.data);
-      const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+      model = data.model || 'deepseek-chat';
+      currentModel = model;
 
-      diag.innerHTML = `<b>${elapsed}s</b> Antwortzeit · Modell: ${data.model || 'deepseek-chat'}`;
-
-      const modelBadge = document.getElementById('stream-model');
-      if (modelBadge) modelBadge.textContent = data.model || 'deepseek-chat';
-
-      const timeEl = document.getElementById('stream-time');
-      if (timeEl) timeEl.textContent = elapsed + 's';
-
-      const loading = document.getElementById('answer-loading');
-      if (loading) loading.style.display = 'none';
-
+      finalizeStreamingMessage(answerText, sources, model);
       es.close();
-      btn.disabled = false;
+      sendBtn.disabled = false;
+      state.isStreaming = false;
+
+      // Save assistant message
+      addMessageToCurrentChat('assistant', answerText, sources, model);
     });
 
     es.addEventListener('error', (e) => {
-      const loading = document.getElementById('answer-loading');
-      if (loading) {
-        loading.innerHTML = '<span style="color:var(--red)">❌ Fehler bei der Antwortgenerierung</span>';
+      hideTerminal();
+      if (!answerText) {
+        // No answer yet — fallback to regular search
+        es.close();
+        fallbackSearch(q);
+        return;
       }
-      // Fallback: if we never got search results, show error
-      if (!hasReceivedSearch) {
-        document.getElementById('ask-results').innerHTML =
-          '<div class="empty"><h2>Fehler</h2><p>Keine Verbindung zum Server.</p></div>';
-      }
-      setTimeout(() => { btn.disabled = false; }, 500);
+
+      finalizeStreamingMessage(answerText, sources, model);
+      addMessageToCurrentChat('assistant', answerText, sources, model);
+      es.close();
+      sendBtn.disabled = false;
+      state.isStreaming = false;
     });
 
-    // Safety timeout — close EventSource after 60s and re-enable button
+    // Safety timeout
     setTimeout(() => {
-      es.close();
-      if (btn.disabled) {
-        btn.disabled = false;
-        const loading = document.getElementById('answer-loading');
-        if (loading) loading.style.display = 'none';
+      if (state.isStreaming) {
+        es.close();
+        sendBtn.disabled = false;
+        state.isStreaming = false;
+        hideTerminal();
+        if (answerText) {
+          finalizeStreamingMessage(answerText, sources, model);
+          addMessageToCurrentChat('assistant', answerText, sources, model);
+        } else {
+          // Fallback to search
+          fallbackSearch(q);
+        }
       }
-    }, 60000);
+    }, 90000);
+
+  } catch (e) {
+    hideTerminal();
+    fallbackSearch(q);
+  }
+}
+
+async function fallbackSearch(q) {
+  hideTerminal();
+  const existing = document.getElementById('streaming-msg');
+  if (existing) existing.remove();
+
+  const sendBtn = document.getElementById('sendBtn');
+  const inner = document.getElementById('messagesInner');
+
+  try {
+    const resp = await fetch('/api/legal/search?q=' + encodeURIComponent(q) + '&top_k=7');
+    const data = await resp.json();
+
+    if (!data.results || data.results.length === 0) {
+      inner.innerHTML += '<div class="error-msg">Keine relevanten Gesetzesstellen gefunden. Bitte versuchen Sie eine andere Formulierung.</div>';
+      addMessageToCurrentChat('assistant', 'Keine relevanten Gesetzesstellen gefunden.', [], '');
+      sendBtn.disabled = false;
+      state.isStreaming = false;
+      return;
+    }
+
+    const results = data.results;
+    window._lastSources = results;
+
+    // Build a user-friendly response
+    let answer = `Ich habe **${results.length}** relevante Fundstellen zu Ihrer Frage gefunden:\n\n`;
+    results.forEach((r, i) => {
+      const label = r.typ === 'urteil'
+        ? `${r.gericht} · ${r.aktenzeichen}`
+        : `${r.abkürzung} ${r.paragraph} — ${r.paragraph_titel || ''}`;
+      answer += `[${i + 1}] **${label}**\n`;
+      const fullText = (r.inhalt || r.volltext || '');
+      const snippet = fullText.length > 500 ? fullText.substring(0, 500) + '...' : fullText;
+      if (snippet) answer += `> ${snippet}\n\n`;
+    });
+    answer += '\n*Möchten Sie eine detaillierte Analyse? Klicken Sie auf eine Quelle für den Volltext oder versuchen Sie es erneut.*';
+
+    addAssistantMessage(answer, results, 'Hybrid-Index');
+    addMessageToCurrentChat('assistant', answer, results, 'Hybrid-Index');
+  } catch (e) {
+    inner.innerHTML += '<div class="error-msg">Fehler bei der Suche. Bitte versuchen Sie es später erneut.</div>';
+  }
+  sendBtn.disabled = false;
+  state.isStreaming = false;
+}
+
+/* ═══════════════════════════════════════════
+   SOURCE PANEL
+   ═══════════════════════════════════════════ */
+function openSourcePanel(idx) {
+  const sources = window._lastSources || [];
+  const source = sources[idx];
+  if (!source) return;
+
+  document.getElementById('sourceOverlay').classList.add('open');
+  document.getElementById('sourcePanel').classList.add('open');
+
+  const abk = source.abkürzung || source.gesetz || '';
+  const para = source.paragraph || '';
+  const titel = source.paragraph_titel || source.titel || '';
+
+  const title = source.typ === 'urteil'
+    ? `${source.gericht || ''} ${source.aktenzeichen || ''}`
+    : `${abk} ${para} — ${titel}`;
+  const sub = source.typ === 'urteil'
+    ? `${source.datum || ''} · ${source.rechtsgebiet || ''}`
+    : `Stand: ${source.stand || '-'} · ${source.rechtsgebiet || ''}`;
+  const text = source.inhalt || source.volltext || source.text_preview || source.leitsatz || '';
+
+  const href = source.url || (source.typ === 'urteil'
+    ? `https://www.rechtsprechung-im-internet.de/jportal/portal/t/bsjrs/bsjrs${source.doc_id}`
+    : `https://www.gesetze-im-internet.de/${abk.toLowerCase()}/index.html`);
+
+  document.getElementById('spTitle').textContent = title;
+  document.getElementById('spSub').textContent = sub;
+  document.getElementById('spText').textContent = text;
+  document.getElementById('sourcePanelTitle').textContent = abk || 'Quelle';
+  document.getElementById('spActions').innerHTML = `
+    <a href="${escHtml(href)}" target="_blank" rel="noopener">🔗 Quelle öffnen</a>
+  `;
+
+  // Try to load related paragraphs from KG
+  if (abk && para) {
+    loadRelated(`${abk}||${para}`);
   }
 
-  function escHtml(s) {
-    if (!s) return '';
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  document.body.style.overflow = 'hidden';
+}
+function closeSourcePanel() {
+  document.getElementById('sourceOverlay').classList.remove('open');
+  document.getElementById('sourcePanel').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function toggleDocs() {
+  const overlay = document.getElementById('docsOverlay');
+  const panel = document.getElementById('docsPanel');
+  const isOpen = panel.classList.toggle('open');
+  overlay.classList.toggle('open');
+  document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+
+function openSourceByRef(refStr) {
+  // Parse reference like "1" or "1,2" or "1-3"
+  const sources = window._lastSources || [];
+  const firstNum = parseInt(refStr);
+  if (firstNum > 0 && firstNum <= sources.length) {
+    openSourcePanel(firstNum - 1);
   }
+}
+
+async function loadRelated(docId) {
+  const list = document.getElementById('spRelatedList');
+  list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">Lade Verweise…</div>';
+  try {
+    const resp = await fetch('/api/legal/related/' + encodeURIComponent(docId));
+    const data = await resp.json();
+    if (data.related && data.related.length > 0) {
+      list.innerHTML = data.related.slice(0, 10).map(r =>
+        `<div class="sp-related-item" onclick="quickSearch('${escHtml(r.label)}')">→ ${escHtml(r.label)}</div>`
+      ).join('');
+    } else {
+      list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">Keine direkten Verweise im Wissen-Graph.</div>';
+    }
+  } catch (e) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">Verweise nicht verfügbar.</div>';
+  }
+}
+
+/* ═══════════════════════════════════════════
+   INPUT HANDLING
+   ═══════════════════════════════════════════ */
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+
+function onInputKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    handleSubmit();
+  }
+}
+
+/* ═══════════════════════════════════════════
+   QUICK SEARCH
+   ═══════════════════════════════════════════ */
+function quickSearch(q) {
+  document.getElementById('queryInput').value = q;
+  handleSubmit();
+}
+
+/* ═══════════════════════════════════════════
+   SIDEBAR TOGGLE (mobile)
+   ═══════════════════════════════════════════ */
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+/* ═══════════════════════════════════════════
+   CASE MANAGEMENT
+   ═══════════════════════════════════════════ */
+function updateCase() {
+  const textarea = document.getElementById('caseTextarea');
+  const active = document.getElementById('caseActive');
+  const label = document.getElementById('caseLabel');
+  if (textarea.value.trim()) {
+    active.style.display = 'flex';
+    label.textContent = textarea.value.trim().substring(0, 60) + '…';
+  } else {
+    active.style.display = 'none';
+  }
+}
+
+function clearCase() {
+  document.getElementById('caseTextarea').value = '';
+  document.getElementById('caseActive').style.display = 'none';
+}
+
+/* ═══════════════════════════════════════════
+   FILE UPLOAD
+   ═══════════════════════════════════════════ */
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fileName = document.getElementById('fileName');
+  fileName.textContent = '📎 ' + file.name;
+  fileName.style.display = 'inline-flex';
+  // For now just visual — backend doesn't support file processing yet
+  // In future: upload file content to context
+}
+
+/* ═══════════════════════════════════════════
+   EXPORT
+   ═══════════════════════════════════════════ */
+function exportChat() {
+  const chat = getCurrentChat();
+  if (!chat || !chat.messages || chat.messages.length === 0) {
+    return;
+  }
+
+  let md = `# LEX — Juristische Recherche\n\n`;
+  md += `**Titel:** ${chat.title || 'Unbenannt'}\n`;
+  md += `**Datum:** ${new Date().toLocaleDateString('de-DE')}\n\n`;
+  md += `---\n\n`;
+
+  chat.messages.forEach(m => {
+    if (m.role === 'user') {
+      md += `## Frage\n\n${m.content}\n\n`;
+    } else if (m.role === 'assistant') {
+      md += `## Antwort ${m.model ? '(' + m.model + ')' : ''}\n\n${m.content}\n\n`;
+      if (m.sources && m.sources.length > 0) {
+        md += `### Quellen\n\n`;
+        m.sources.forEach((s, i) => {
+          md += `${i + 1}. ${s.abkürzung || ''} ${s.paragraph || ''} — Score: ${(s.rerank_score || s.score || 0).toFixed(4)}\n`;
+        });
+        md += '\n';
+      }
+    }
+  });
+
+  md += `---\n*Exportiert von LEX — Juristischer KI-Assistent*\n`;
+
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `LEX-${chat.title?.substring(0, 40).replace(/[^a-zäöüßA-Z0-9]/g, '_') || 'recherche'}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ═══════════════════════════════════════════
+   STATS LOADING
+   ═══════════════════════════════════════════ */
+async function loadStats() {
+  try {
+    const resp = await fetch('/api/legal/stats');
+    const data = await resp.json();
+    const docs = data.total_docs || 0;
+    state.docCount = docs;
+
+    // Estimated counts (backend doesn't provide these separately)
+    const laws = 72;
+    const courts = 7;
+
+    document.getElementById('statDocs').textContent = docs.toLocaleString();
+    document.getElementById('statLaws').textContent = laws;
+    document.getElementById('statCourts').textContent = courts;
+
+    document.getElementById('welcomeDocs').textContent = docs.toLocaleString();
+    document.getElementById('welcomeLaws').textContent = laws;
+    document.getElementById('welcomeCourts').textContent = courts;
+  } catch (e) {
+    // Keep defaults
+  }
+}
+
+/* ═══════════════════════════════════════════
+   OVERLAY CLICK (close source panel)
+   ═══════════════════════════════════════════ */
+document.getElementById('sourceOverlay').addEventListener('click', closeSourcePanel);
+
+/* ═══════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════ */
+loadStats();
+
+// Restore last chat or start new
+const sorted = [...state.chats].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+if (sorted.length > 0 && sorted[0].messages && sorted[0].messages.length > 0) {
+  switchChat(sorted[0].id);
+  // Restore current case
+  const lastCase = localStorage.getItem('lex_case');
+  if (lastCase) {
+    document.getElementById('caseTextarea').value = lastCase;
+    updateCase();
+  }
+} else {
+  newChat();
+}
+
+// Focus input
+document.getElementById('queryInput').focus();
 </script>
 </body>
 </html>

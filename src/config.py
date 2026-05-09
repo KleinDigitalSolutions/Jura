@@ -59,7 +59,7 @@ PRIORITY_LAWS: list[str] = [
     "SGB XI", "SGB XII", "WoGG",
     # IP / IT / Medien
     "UrhG", "MarkenG", "PatG", "DesignG", "GebrMG",
-    "BDSG", "TKG", "TTDSG",
+    "BDSG", "TKG", "TTDSG", "TDDDG", "UWG",
     # Insolvenz
     "InsO",
     # Verkehr

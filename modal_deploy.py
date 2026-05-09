@@ -87,10 +87,15 @@ REGELN FÜR DEINE ANTWORT
 2. FALLS die Gesetzestexte die Frage nicht beantworten können,
    sage das ehrlich. Falls sie nur teilweise helfen, erkläre was fehlt.
 
-3. STRUKTURIERE deine Antwort:
-   - Relevante Gesetzesgrundlage nennen
-   - Konkrete Paragraphen zitieren (mit [Nummer])
-   - Nächste logische Schritte skizzieren
+3. STRUKTURIERE deine Antwort zwingend nach dem IRAC-Schema (Markdown-Überschriften):
+   ### 1. Issue (Rechtliche Fragestellung)
+   - Präzise Zusammenfassung der juristischen Kernfrage.
+   ### 2. Rule (Relevante Normen)
+   - Nennung der primären und ergänzenden Rechtsgrundlagen (mit [Nummer]).
+   ### 3. Analysis (Juristische Prüfung & Subsumtion)
+   - Anwendung der Normen auf den Sachverhalt (beziehe dich auf den Mandantenfall).
+   ### 4. Conclusion (Handlungsempfehlung)
+   - Was muss der Mandant jetzt konkret tun? Welche Unterlagen fehlen ggf.?
 
 4. IMMER mit Disclaimer: "Dies ist eine allgemeine Information,
    keine Rechtsberatung. Ein Anwalt wird Ihren konkreten Fall bewerten."
@@ -171,51 +176,69 @@ class LegalRAG:
 
         user_prompt, citations = _build_ask_context(search_results, query, top_k)
 
+        # Failover mechanism: Try preferred provider first, then alternate
         provider = os.getenv("LLM_PROVIDER", "deepseek")
-
-        if provider == "anthropic":
-            try:
-                from anthropic import Anthropic
-
-                client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-                response = client.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=2000,
-                    temperature=0.2,
-                    system=LEX_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": user_prompt}],
-                )
-                answer = response.content[0].text.strip()
-                model_used = "claude-sonnet-4-20250514"
-            except Exception as e:
-                answer = f"Fehler bei der Anthropic-LLM-Antwortgenerierung: {e}"
-                model_used = "error"
+        providers = [provider]
+        if provider == "deepseek":
+            providers.append("anthropic")
         else:
-            try:
-                from openai import OpenAI
+            providers.append("deepseek")
 
-                client = OpenAI(
-                    api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-                    base_url="https://api.deepseek.com",
-                )
-                response = client.chat.completions.create(
-                    model="deepseek-chat",
-                    temperature=0.2,
-                    messages=[
-                        {"role": "system", "content": LEX_SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                )
-                answer = response.choices[0].message.content.strip()
-                model_used = "deepseek-chat"
-            except Exception as e:
-                answer = f"Fehler bei der DeepSeek-LLM-Antwortgenerierung: {e}"
-                model_used = "error"
+        last_error = ""
+        for p in providers:
+            if p == "anthropic":
+                try:
+                    from anthropic import Anthropic
+                    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+                    if not api_key:
+                        continue
+                    client = Anthropic(api_key=api_key)
+                    response = client.messages.create(
+                        model="claude-3-5-sonnet-latest",
+                        max_tokens=2000,
+                        temperature=0.2,
+                        system=LEX_SYSTEM_PROMPT,
+                        messages=[{"role": "user", "content": user_prompt}],
+                    )
+                    return {
+                        "answer": response.content[0].text.strip(),
+                        "citations": citations,
+                        "model": "claude-3-5-sonnet",
+                    }
+                except Exception as e:
+                    last_error = f"Anthropic error: {e}"
+                    continue
+            else:
+                try:
+                    from openai import OpenAI
+                    api_key = os.getenv("DEEPSEEK_API_KEY", "")
+                    if not api_key:
+                        continue
+                    client = OpenAI(
+                        api_key=api_key,
+                        base_url="https://api.deepseek.com",
+                    )
+                    response = client.chat.completions.create(
+                        model="deepseek-chat",
+                        temperature=0.2,
+                        messages=[
+                            {"role": "system", "content": LEX_SYSTEM_PROMPT},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                    )
+                    return {
+                        "answer": response.choices[0].message.content.strip(),
+                        "citations": citations,
+                        "model": "deepseek-chat",
+                    }
+                except Exception as e:
+                    last_error = f"DeepSeek error: {e}"
+                    continue
 
         return {
-            "answer": answer,
+            "answer": f"KI-Schnittstellen (DeepSeek & Claude) sind derzeit nicht erreichbar. Bitte versuchen Sie es in Kürze erneut. ({last_error})",
             "citations": citations,
-            "model": model_used,
+            "model": "error",
         }
 
 
@@ -232,9 +255,19 @@ def _build_ask_context(search_results: list, query: str, top_k: int = 5):
         para = r.get("paragraph", "")
         titel = r.get("paragraph_titel", "")
         inhalt = r.get("inhalt", "") or r.get("volltext", "") or ""
-        if len(inhalt) > 2000:
-            inhalt = inhalt[:2000] + "…"
-        context_parts.append(f"{cite_id} {para} {abk} — {titel}\n{inhalt}")
+        
+        # Inform the LLM about the context type
+        ctx_info = ""
+        ctype = r.get("context_type")
+        if ctype == "neighbor":
+            ctx_info = " (Nachbar-Paragraph / Kontext)"
+        elif ctype == "citation":
+            ctx_info = " (Zitierte/Verwandte Norm)"
+
+        if len(inhalt) > 3000:
+            inhalt = inhalt[:3000] + "…"
+            
+        context_parts.append(f"{cite_id} {para} {abk}{ctx_info} — {titel}\n{inhalt}")
         citations.append({
             "id": cite_id,
             "gesetz": abk,
@@ -242,15 +275,17 @@ def _build_ask_context(search_results: list, query: str, top_k: int = 5):
             "titel": titel,
             "url": r.get("url", ""),
             "score": r.get("rerank_score", r.get("score", 0)),
-            "text_preview": inhalt[:2000],
+            "text_preview": inhalt[:500],
+            "context_type": ctype or "primary"
         })
     context = "\n\n---\n\n".join(context_parts)
     user_prompt = f"""FRAGE: {query}
 
-GESETZESTEXTE:
+GESETZESTEXTE (Primärtreffer & struktureller Kontext):
 {context}
 
-Beantworte die Frage auf Basis der zitierten Gesetzestexte.
+Analysiere die Frage präzise auf Basis der bereitgestellten Gesetzestexte. 
+Beachte dabei besonders die Zusammenhänge zwischen den Paragraphen.
 Zitiere jede Quelle mit ihrer [Nummer]."""
     return user_prompt, citations
 
@@ -305,42 +340,67 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
 
             yield "event: search\ndata: " + json.dumps({"citations": citations, "count": len(citations)}) + "\n\n"
 
+            # Failover mechanism for streaming
             provider = os.getenv("LLM_PROVIDER", "deepseek")
-            model_used = provider
-
-            if provider == "anthropic":
-                from anthropic import Anthropic
-                client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-                with client.messages.stream(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=2000,
-                    temperature=0.2,
-                    system=LEX_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": user_prompt}],
-                ) as stream:
-                    for text in stream.text_stream:
-                        yield "event: token\ndata: " + json.dumps(text) + "\n\n"
-                model_used = "claude-sonnet-4-20250514"
+            providers = [provider]
+            if provider == "deepseek":
+                providers.append("anthropic")
             else:
-                from openai import OpenAI
-                client = OpenAI(
-                    api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-                    base_url="https://api.deepseek.com",
-                )
-                response = client.chat.completions.create(
-                    model="deepseek-chat",
-                    temperature=0.2,
-                    stream=True,
-                    messages=[
-                        {"role": "system", "content": LEX_SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                )
-                for chunk in response:
-                    delta = chunk.choices[0].delta.content
-                    if delta:
-                        yield "event: token\ndata: " + json.dumps(delta) + "\n\n"
-                model_used = "deepseek-chat"
+                providers.append("deepseek")
+
+            last_error = ""
+            success = False
+            for p in providers:
+                try:
+                    if p == "anthropic":
+                        from anthropic import Anthropic
+                        api_key = os.getenv("ANTHROPIC_API_KEY", "")
+                        if not api_key: continue
+                        client = Anthropic(api_key=api_key)
+                        with client.messages.stream(
+                            model="claude-3-5-sonnet-latest",
+                            max_tokens=2000,
+                            temperature=0.2,
+                            system=LEX_SYSTEM_PROMPT,
+                            messages=[{"role": "user", "content": user_prompt}],
+                        ) as stream:
+                            for text in stream.text_stream:
+                                yield "event: token\ndata: " + json.dumps(text) + "\n\n"
+                        model_used = "claude-3-5-sonnet"
+                        success = True
+                        break
+                    else:
+                        from openai import OpenAI
+                        api_key = os.getenv("DEEPSEEK_API_KEY", "")
+                        if not api_key: continue
+                        client = OpenAI(
+                            api_key=api_key,
+                            base_url="https://api.deepseek.com",
+                        )
+                        response = client.chat.completions.create(
+                            model="deepseek-chat",
+                            temperature=0.2,
+                            stream=True,
+                            messages=[
+                                {"role": "system", "content": LEX_SYSTEM_PROMPT},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                        )
+                        for chunk in response:
+                            delta = chunk.choices[0].delta.content
+                            if delta:
+                                yield "event: token\ndata: " + json.dumps(delta) + "\n\n"
+                        model_used = "deepseek-chat"
+                        success = True
+                        break
+                except Exception as e:
+                    last_error = str(e)
+                    continue
+
+            if not success:
+                yield "event: error\ndata: " + json.dumps({"message": f"KI-Modelle nicht erreichbar. ({last_error})"}) + "\n\n"
+                yield "event: done\ndata: {}\n\n"
+                return
 
             yield "event: done\ndata: " + json.dumps({"model": model_used}) + "\n\n"
 
@@ -390,47 +450,8 @@ async def index():
 
 
 # ---------------------------------------------------------------------------
-# Modal cron: weekly re-scrape + re-index (Saturday 02:00 UTC)
-# ---------------------------------------------------------------------------
-@app.function(
-    image=image,
-    volumes={VOLUME_PATH: VOLUME},
-    secrets=[DEEPSEEK_SECRET, ANTHROPIC_SECRET],
-    schedule=modal.Cron("0 2 * * 6"),
-    timeout=3600,
-)
-def weekly_ingest():
-    """Re-scrape all laws and update the index."""
-    import asyncio
-
-    sys.path.insert(0, "/")
-    os.environ["LEGAL_RAG_STORAGE"] = str(VOLUME_PATH)
-
-    from src.ingestion.rag_pipeline import LegalRAGPipeline
-    from src.scrapers.gesetze_scraper import GesetzeScraper
-    from src.processors.cleaner import clean
-    from src.processors.metadata_extractor import extract as extract_metadata
-
-    async def run():
-        print("Starting weekly re-index...")
-        all_docs = []
-        async with GesetzeScraper() as scraper:
-            docs = await scraper.scrape()
-            all_docs.extend(docs)
-        print(f"Scraped {len(all_docs)} documents")
-
-        for doc in all_docs:
-            if doc.get("inhalt"):
-                doc["inhalt"] = clean(doc["inhalt"])
-            doc = extract_metadata(doc)
-
-        pipeline = LegalRAGPipeline()
-        stats = await pipeline.insert_documents(all_docs)
-        print(f"Indexed: {stats}")
-        VOLUME.commit()
-        return stats
-
-    return asyncio.run(run())
+# Weekly scrape runs locally via launchd (Modal IPs blocked by gesetze-im-internet.de).
+# See: scripts/weekly_scrape.sh + scripts/com.legal-rag.weekly-scrape.plist
 
 
 # ---------------------------------------------------------------------------

@@ -246,8 +246,8 @@ class LegalIndexer:
                     self.graph = nx.read_graphml(GRAPH_PATH)
                 except Exception:
                     self.graph = None
-            for doc in self.documents:
-                self._para_index[_doc_para_id(doc)] = doc
+            for i, doc in enumerate(self.documents):
+                self._para_index[_doc_para_id(doc)] = {"doc": doc, "index": i}
             logger.info(f"Loaded {len(self.documents)} existing docs (incremental mode)")
         else:
             self.documents = []
@@ -311,7 +311,7 @@ class LegalIndexer:
                 point_id = total_before + i + j
                 doc = new_docs[i + j]
                 self.documents.append(doc)
-                self._para_index[_doc_para_id(doc)] = doc
+                self._para_index[_doc_para_id(doc)] = {"doc": doc, "index": len(self.documents) - 1}
                 points.append(PointStruct(
                     id=point_id,
                     vector={
@@ -355,8 +355,8 @@ class LegalIndexer:
             self.documents = json.load(f)
         if Path(GRAPH_PATH).exists():
             self.graph = nx.read_graphml(GRAPH_PATH)
-        for doc in self.documents:
-            self._para_index[_doc_para_id(doc)] = doc
+        for i, doc in enumerate(self.documents):
+            self._para_index[_doc_para_id(doc)] = {"doc": doc, "index": i}
         logger.info(
             f"Loaded index: {len(self.documents)} docs, "
             f"{self.graph.number_of_nodes() if self.graph else 0} nodes"
@@ -378,7 +378,7 @@ class LegalSearcher:
     _QUERY_LAW = re.compile(
         r"\b(BGB|StGB|HGB|ZPO|StPO|GG|VwVfG|AktG|GmbHG?|InsO|FamFG|"
         r"BDSG|UrhG|MarkenG|PatG|BauGB|VwGO|AO|KStG|EStG|UStG|UmwG|WpHG|BetrVG|"
-        r"SGB|KSchG|BVerfGG|TKG|WEG|EGBGB|BGBEG|UmwG)\b",
+        r"SGB|KSchG|BVerfGG|TKG|WEG|EGBGB|BGBEG|UmwG|UWG|TTDSG|TDDDG)\b",
         re.IGNORECASE,
     )
 
@@ -464,8 +464,10 @@ class LegalSearcher:
         q_laws = [m.upper() for m in self._QUERY_LAW.findall(query)]
 
         # Auto-apply gesetz filter from query (e.g. "GmbH" → GmbHG)
+        auto_gesetz = False
         if q_laws and not gesetz:
             gesetz = q_laws[0]
+            auto_gesetz = True
             all_abks = {d.get("abkürzung", "").upper() for d in self.indexer.documents}
             if gesetz not in all_abks and gesetz + "G" in all_abks:
                 gesetz = gesetz + "G"
@@ -499,7 +501,15 @@ class LegalSearcher:
         if rechtsgebiet:
             conditions.append(FieldCondition(key="rechtsgebiet", match=MatchValue(value=rechtsgebiet)))
         if gesetz:
-            conditions.append(FieldCondition(key="abk", match=MatchValue(value=gesetz.upper())))
+            # Match exact case from stored documents (Qdrant keyword matching is case-sensitive)
+            gesetz_upper = gesetz.upper()
+            exact_abk = None
+            for d in self.indexer.documents:
+                candidate = (d.get("abkürzung", "") or "").strip()
+                if candidate.upper() == gesetz_upper:
+                    exact_abk = candidate
+                    break
+            conditions.append(FieldCondition(key="abk", match=MatchValue(value=exact_abk or gesetz)))
         if conditions:
             qf = Filter(must=conditions)
 
@@ -522,6 +532,23 @@ class LegalSearcher:
 
         merged = self._weighted_fusion(dense_response, sparse_response)
 
+        # Fallback: if auto-filter returns too few results, retry without filter
+        # (handles "GmbH Insolvenz" — GmbHH narrows to GmbHG but Insolvenz is in InsO)
+        if auto_gesetz and qf and len(merged) < top_k:
+            logger.info(f"Auto-filter '{gesetz}' gave {len(merged)} results, retrying without filter")
+            dense_no_filter = self.qdrant.query_points(
+                collection_name=COLLECTION_NAME,
+                query=dense_vec,
+                limit=top_k * 3,
+            )
+            sparse_no_filter = self.qdrant.query_points(
+                collection_name=COLLECTION_NAME,
+                query=sparse_vec,
+                using=SPARSE_VECTOR_NAME,
+                limit=top_k * 3,
+            )
+            merged = self._weighted_fusion(dense_no_filter, sparse_no_filter)
+
         # Build candidate list from merged results, excluding pinned docs
         candidates: list[dict] = []
         docs = self.indexer.documents
@@ -531,12 +558,63 @@ class LegalSearcher:
             if doc_id < len(docs):
                 doc = dict(docs[doc_id])
                 doc["score"] = round(score, 4)
+                doc["doc_index"] = doc_id
                 doc["label"] = self.indexer._doc_label(doc)
                 doc["pid"] = _doc_para_id(doc)
                 candidates.append(doc)
 
-        # --- Rerank ---
-        reranked = self._rerank(query, candidates, top_k)
+        # --- Structural Context Expansion (Sustainable Legal Logic) ---
+        # For the top-5 primary candidates, pull in their immediate context
+        expanded_candidates: list[dict] = []
+        seen_ids: set[int] = pinned_ids.copy()
+        
+        # We start with the primary candidates
+        for c in candidates:
+            if c["doc_index"] not in seen_ids:
+                expanded_candidates.append(c)
+                seen_ids.add(c["doc_index"])
+
+        # Expand: Adjacency (Neighbors) + Knowledge Graph (Citations)
+        # Limit expansion to top 10 primary hits for maximum context
+        primary_hits = candidates[:10]
+        for primary in primary_hits:
+            # 1. Adjacency Expansion (§ X-1, § X+1)
+            idx = primary["doc_index"]
+            for offset in [-1, 1]:
+                neighbor_idx = idx + offset
+                if 0 <= neighbor_idx < len(docs) and neighbor_idx not in seen_ids:
+                    neighbor = docs[neighbor_idx]
+                    if neighbor.get("abkürzung") == primary.get("abkürzung"):
+                        d = dict(neighbor)
+                        d["score"] = primary["score"] * 0.95  # Minimal penalty
+                        d["doc_index"] = neighbor_idx
+                        d["label"] = self.indexer._doc_label(neighbor)
+                        d["pid"] = _doc_para_id(neighbor)
+                        d["context_type"] = "neighbor"
+                        expanded_candidates.append(d)
+                        seen_ids.add(neighbor_idx)
+
+            # 2. Relational Expansion (Knowledge Graph)
+            graph_neighbors = self.get_related(primary)
+            for gn in graph_neighbors:
+                gn_pid = gn.get("pid")
+                # Fast lookup using _para_index
+                indexed_hit = self.indexer._para_index.get(gn_pid)
+                if indexed_hit:
+                    idx = indexed_hit["index"]
+                    if idx not in seen_ids:
+                        d = dict(indexed_hit["doc"])
+                        d["score"] = primary["score"] * 0.90  # Slight penalty
+                        d["doc_index"] = idx
+                        d["label"] = self.indexer._doc_label(d)
+                        d["pid"] = gn_pid
+                        d["context_type"] = "citation"
+                        expanded_candidates.append(d)
+                        seen_ids.add(idx)
+
+        # --- Rerank Expanded Candidates ---
+        # The reranker will now see § 15a AND § 15b and can decide which is better
+        reranked = self._rerank(query, expanded_candidates, top_k)
 
         # Prepend pinned exact matches
         results = pinned + reranked

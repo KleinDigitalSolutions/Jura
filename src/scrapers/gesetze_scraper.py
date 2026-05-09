@@ -70,7 +70,9 @@ LAW_SLUG_MAP: dict[str, str] = {
     "MarkenG": "markeng",
     "PatG": "patg",
     "GebrMG": "gebrmg",
+    "TDDDG": "ttdsg",
     "TTDSG": "ttdsg",
+    "UWG": "uwg_2004",
     "BDSG": "bdsg_2018",
     # Insolvenz
     "InsO": "inso",

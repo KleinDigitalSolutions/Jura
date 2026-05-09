@@ -6,7 +6,7 @@ Legal RAG Ingestion — German federal law scraper, search index, and Q&A API.
 
 Scrapes 72 German federal laws from gesetze-im-internet.de, processes them into structured paragraph-level documents, and indexes them for hybrid search (bge-m3 dense + learned sparse, weighted fusion, cross-encoder reranker). Deployed on Modal as a FastAPI web app with LEX/JURA legal assistant persona (DeepSeek default, Claude switchable).
 
-**Current index**: 16,509 cleaned paragraph documents from 72 laws + 782 court ruling chunks from 398 Urteilen (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG).
+**Current index**: 16,961 cleaned documents from 72 laws + court ruling chunks from 398 Urteilen (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG).
 
 ## Quick commands
 
@@ -39,6 +39,12 @@ modal volume put legal-rag-data documents.json /legal_rag_storage/documents.json
 modal volume put legal-rag-data legal_graph.graphml /legal_rag_storage/legal_graph.graphml
 modal volume put legal-rag-data qdrant/meta.json /legal_rag_storage/qdrant/meta.json
 modal volume put legal-rag-data qdrant/collection/legal_docs/storage.sqlite /legal_rag_storage/qdrant/collection/legal_docs/storage.sqlite
+
+# Weekly scrape (local launchd)
+bash scripts/weekly_scrape.sh                         # manual run
+cp scripts/com.legal-rag.weekly-scrape.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.legal-rag.weekly-scrape.plist
+launchctl list | grep legal-rag                       # verify
 ```
 
 ## Architecture
@@ -64,7 +70,7 @@ gesetze-im-internet.de (XML)          rechtsprechung-im-internet.de (RSS + XML Z
                          │    Qdrant (local mode, SQLite, path=legal_rag_storage/qdrant/)
                          │    Named vectors: "" (dense 1024-dim) + "lexical" (sparse)
                          │
-                         └──► Knowledge Graph (NetworkX DiGraph, regex §-Verweis parser, 1.23M edges)
+                         └──► Knowledge Graph (NetworkX DiGraph, regex §-Verweis parser, 965K edges)
                                    │
                                    ▼
                              legal_graph.graphml
@@ -79,8 +85,8 @@ All indexes rebuilt together from `documents.json`. No incremental updates — f
 ```
 legal_rag_storage/          ← path from $LEGAL_RAG_STORAGE env var
 ├── documents.json          ← 17K+ docs, all structured fields (source of truth)
-├── legal_graph.graphml     ← NetworkX DiGraph (1.23M edges)
-└── qdrant/                 ← Qdrant local mode (~210 MB, 1024-dim dense + sparse)
+├── legal_graph.graphml     ← NetworkX DiGraph (965K edges)
+└── qdrant/                 ← Qdrant local mode (~280 MB, 1024-dim dense + sparse)
 ```
 
 Modal Volume `legal-rag-data` mirrors this at `/legal_rag_storage`.
@@ -121,7 +127,7 @@ Loads `documents.json`, applies filters, saves cleaned version, then full rebuil
 | `"Inhaltsübersicht"` or `"Inhaltsverzeichnis"` in paragraph | Table of contents entries | 35 |
 | `abkürzung.startswith("./")` | Unofficial TOC (nichtamtliches Inhaltsverzeichnis) | 1,521 |
 
-**Total**: ~17,500 raw → 17,291 clean (16,509 Gesetze + 782 Urteile).
+**Total**: ~17,500 raw → 16,961 clean.
 
 ## Modal deployment (modal_deploy.py)
 
@@ -145,7 +151,7 @@ Loads `documents.json`, applies filters, saves cleaned version, then full rebuil
 - `GET /api/legal/stats` — index statistics
 - `GET /` — LEX chat UI (HTML/JS SPA with dark theme, German)
 
-**Weekly cron**: `weekly_ingest` runs Saturday 02:00 UTC. **NOTE**: Modal IPs blocked by gesetze-im-internet.de, so cron scraping fails in production. Scrape locally, upload to Volume.
+**Weekly scrape**: Runs locally via macOS launchd (Saturday 04:00 CET). Script at `scripts/weekly_scrape.sh`, plist at `scripts/com.legal-rag.weekly-scrape.plist`. Scrapes gesetze + urteile residential, embeds incrementally, uploads to Modal Volume. Modal cron removed (datacenter IPs blocked).
 
 **LLM Provider Switch**: `LLM_PROVIDER` env var (`deepseek` default, `anthropic` for Claude). `generate_answer()` branches: DeepSeek via `openai.OpenAI(base_url="https://api.deepseek.com")` with `deepseek-chat`, Claude via `anthropic.Anthropic()` with `claude-sonnet-4-20250514`.
 

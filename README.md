@@ -1,6 +1,6 @@
 # Legal RAG — German Law Search & Q&A
 
-Hybrid search engine for German federal law: 16,509 paragraphs from 72 laws + 782 court ruling chunks from 398 Urteilen (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG) indexed with bge-m3 (dense + learned sparse) + cross-encoder reranker. Deployed on Modal as a FastAPI web app with LEX/JURA legal assistant persona (DeepSeek default, Claude switchable).
+Hybrid search engine for German federal law: 16,961 documents from 72 laws + court ruling chunks from 398 Urteilen (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG) indexed with bge-m3 (dense + learned sparse) + cross-encoder reranker. Deployed on Modal as a FastAPI web app with LEX/JURA legal assistant persona (DeepSeek default, Claude switchable).
 
 **Live**: [legal-rag-fastapi-app.modal.run](https://aliundmaggy--legal-rag-fastapi-app.modal.run)
 
@@ -38,7 +38,7 @@ gesetze-im-internet.de (XML ZIPs)    rechtsprechung-im-internet.de (RSS + XML)
 | Vector DB | Qdrant local mode (SQLite), named sparse vectors |
 | Fusion | Weighted (0.7 dense / 0.3 sparse, min-max normalized) |
 | Reranker | `BAAI/bge-reranker-v2-m3` cross-encoder via FlagEmbedding |
-| Knowledge Graph | NetworkX DiGraph, regex §-Verweis parser (341K edges) |
+| Knowledge Graph | NetworkX DiGraph, regex §-Verweis parser (965K edges) |
 | LLM (Q&A) | DeepSeek Chat (default) / Claude Sonnet 4.6 (switchable via `LLM_PROVIDER`) |
 | Deployment | Modal (FastAPI ASGI, Volume, GPU T4, Cron) |
 
@@ -101,15 +101,15 @@ Applied by `rebuild_clean.py`:
 | `paragraph` contains "Inhaltsübersicht" | Table of contents entries |
 | `abkürzung` starts with "./" | Unofficial TOC |
 
-**17,500 raw → 17,291 clean documents (16,509 Gesetze + 782 Urteile).**
+**17,500 raw → 16,961 clean documents.**
 
 ## Storage
 
 ```
 legal_rag_storage/
-├── documents.json          ← 17,291 docs, all structured fields
-├── legal_graph.graphml     ← NetworkX DiGraph (1.23M edges)
-└── qdrant/                 ← Qdrant local mode (~250 MB, 1024-dim + sparse)
+├── documents.json          ← 16,961 docs, all structured fields
+├── legal_graph.graphml     ← NetworkX DiGraph (965K edges)
+└── qdrant/                 ← Qdrant local mode (~280 MB, 1024-dim + sparse)
 ```
 
 Path set via `$LEGAL_RAG_STORAGE` env var.
@@ -143,7 +143,7 @@ modal volume put legal-rag-data qdrant/collection/legal_docs/storage.sqlite lega
 - **Volume**: `legal-rag-data` at `/legal_rag_storage` (persistent)
 - **Secrets**: `my-deepseek-secret` (DeepSeek API key), `my-anthropic-secret` (Anthropic API key, optional)
 - **Concurrency**: max 10 inputs per container
-- **Cron**: Saturday 02:00 UTC re-scrape (**broken** — Modal IPs blocked by gesetze-im-internet.de)
+- **Cron**: Local macOS launchd (Saturday 04:00 CET) — scrapes residential, uploads to Volume. `scripts/weekly_scrape.sh`
 
 ### LLM Provider Switch
 
@@ -191,7 +191,7 @@ LOG_LEVEL=INFO
 - **GPU recommended**: bge-m3 (2.2GB) + reranker (1.1GB) run on CPU but ~7s/batch. Modal T4 GPU reduces cold start + inference time significantly.
 - **Court rulings**: 7 courts (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG) from rechtsprechung-im-internet.de (RSS feed + XML ZIP). BGH Zivilsenat prioritized. 398 rulings, chunked into 782 searchable segments. Scraped locally, uploaded to Volume.
 - **No EU law**: EUR-Lex SPARQL scraper is scaffolded but not yet integrated.
-- **Modal scraping broken**: gesetze-im-internet.de blocks datacenter IPs. All scraping must run locally, then upload to Volume.
+- **Scraping**: Must run from residential IP (gesetze blocks datacenters). Automated via local launchd (`scripts/weekly_scrape.sh`), uploads to Modal Volume.
 - **No law versioning**: Indexes only the current version. No historical law versions or transitional provisions.
 - **Single-writer Qdrant**: Local mode doesn't support concurrent writes. Harmless `sys.meta_path is None` error on process exit.
 - **Partial scrapers merge**: `--run-urteile` or `--run-gesetze` alone no longer overwrite `documents.json`. Pipeline merges with existing docs (Gesetze dedup by `ABK||§`, Urteile by `doc_id`).
