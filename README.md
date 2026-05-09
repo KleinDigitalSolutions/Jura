@@ -133,6 +133,8 @@ modal volume put legal-rag-data qdrant/collection/legal_docs/storage.sqlite lega
 |-------|-------------|
 | `GET /api/legal/search?q=...&top_k=10&rechtsgebiet=...&gesetz=...` | Weighted fusion search + reranker |
 | `GET /api/legal/ask?q=...&top_k=5` | Search + LEX persona LLM answer with citations |
+| `GET /api/legal/ask/stream` | Server-Sent Events streaming |
+| `GET /api/legal/ask/enhanced?q=...&top_k=5` | Enhanced search (query rewrite + multi-query RRF) + LLM answer |
 | `GET /api/legal/related/{doc_id}` | Knowledge graph references (bidirectional) |
 | `GET /api/legal/stats` | Index statistics |
 | `GET /` | LEX chat UI (dark theme, mobile-responsive) |
@@ -159,6 +161,16 @@ LLM_PROVIDER=anthropic
 
 On Modal, set via Secret or environment variable in `modal_deploy.py`.
 
+### Enhanced Search (Query Rewriting + Multi-Query RRF)
+
+The `/api/legal/ask/enhanced` endpoint runs an additional pipeline before the standard search:
+
+1. **Query Classification** — fast keyword-based Rechtsgebiet detection (`LegalQueryClassifier`)
+2. **Query Rewriting** — LLM (DeepSeek/Claude) generates 3 legal-search-friendly variants with § references (`LegalQueryRewriter`)
+3. **Multi-Query RRF Search** — runs `search()` for each variant independently, merges via Reciprocal Rank Fusion (k=60) (`search_multi_query()`)
+
+Every stage degrades gracefully: if the LLM is unavailable, rewriting falls back to the original query; if multi-query fails, it falls back to single-query search.
+
 ## CLI Reference
 
 ```bash
@@ -170,6 +182,9 @@ python main.py --schedule         # Start weekly scheduler
 python main.py --stats            # Show storage size + doc/graph/Qdrant counts
 python main.py --search QUERY     # CLI search (weighted fusion + reranker)
 python main.py --search-related "BGB||§ 242"  # KG references
+
+# Retrieval quality evaluation (17 cases, single vs multi-query comparison)
+python -m pytest tests/test_retrieval_quality.py -v -s
 ```
 
 ## Configuration (.env)
@@ -184,6 +199,7 @@ EMBEDDING_DIM=1024
 RERANKER_MODEL_NAME=BAAI/bge-reranker-v2-m3
 BATCH_SIZE=32
 LOG_LEVEL=INFO
+REWRITER_TIMEOUT=5.0              # LLM timeout for query rewriting (seconds)
 ```
 
 ## Known Limitations
@@ -203,13 +219,18 @@ legal-rag-ingestion/
 ├── src/
 │   ├── scrapers/{base,gesetze,eurlex,urteile}_scraper.py
 │   ├── processors/{cleaner,metadata_extractor,chunker}.py
-│   ├── ingestion/rag_pipeline.py     ← core: bge-m3 embed, weighted fusion, rerank, search
+│   ├── ingestion/rag_pipeline.py     ← core: bge-m3 embed, weighted fusion, rerank, search, multi-query RRF
+│   ├── retrieval/
+│   │   ├── query_rewriter.py         ← LLM-based query rewriting (3 legal variants)
+│   │   ├── query_classifier.py       ← keyword-based Rechtsgebiet detection
+│   │   └── enhanced_search.py        ← classify → rewrite → multi-query orchestrator
 │   ├── scheduler/cron.py
 │   └── config.py
-├── modal_deploy.py                   ← Modal FastAPI app + LEX persona
+├── modal_deploy.py                   ← Modal FastAPI app + LEX persona + enhanced search endpoint
 ├── rebuild_clean.py                  ← filter + rebuild index from documents.json
 ├── main.py                           ← CLI entry point
 ├── tests/
+│   └── test_retrieval_quality.py     ← 17-case retrieval eval (single vs multi-query)
 ├── .env.example
 └── requirements.txt
 ```

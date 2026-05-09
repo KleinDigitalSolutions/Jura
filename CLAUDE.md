@@ -31,6 +31,9 @@ python main.py --search "Treu und Glauben" --top-k 5
 python main.py --search "§ 242 BGB" --gesetz BGB
 python main.py --search-related "BGB||§ 242"
 
+# Retrieval quality evaluation (17 cases, compares single vs multi-query)
+python -m pytest tests/test_retrieval_quality.py -v -s
+
 # Deploy to Modal
 modal deploy modal_deploy.py
 
@@ -99,7 +102,18 @@ Modal Volume `legal-rag-data` mirrors this at `/legal_rag_storage`.
 - `LegalEmbedder` — wraps FlagEmbedding `BGEM3FlagModel`, `.embed(texts)` → `(list[list[float]], list[SparseVector])`, `.embed_query(text)` → `(list[float], SparseVector)`. Manually L2-normalizes dense vectors (bge-m3 doesn't auto-normalize). `use_fp16=True` when CUDA available.
 - `LegalIndexer` — manages Qdrant (dense + sparse named vectors) + NetworkX graph. `_ensure_collection()` creates collection with `sparse_vectors_config={"lexical": SparseVectorParams(...)}`. `index()` embeds in batches, upserts to Qdrant with dict vector `{"": dense, "lexical": sparse}`. No BM25.
 - `LegalSearcher` — weighted fusion search + cross-encoder reranker. `search()` parses query for §/law → pins exact matches → runs two independent Qdrant queries (dense + sparse) → weighted fusion (0.7/0.3, min-max normalized) → calls `_rerank()` with lazy-loaded `FlagReranker("BAAI/bge-reranker-v2-m3")` → prepends pinned, returns `[:top_k]`.
+  - `search_multi_query(queries, top_k)` — RRF fusion across multiple queries. Runs full `search()` per query independently, merges via RRF (k=60), deduplicates by pid. Graceful degradation: one query bombing doesn't sink the rest.
 - `LegalRAGPipeline` — orchestrator, owns embedder/indexer/searcher, provides `insert_documents()` and `search()`.
+
+## Enhanced search (src/retrieval/)
+
+Three modules implementing a query classification → rewriting → multi-query RRF pipeline with graceful degradation at every stage:
+
+- **`query_classifier.py`** — `LegalQueryClassifier`: Fast keyword-based Rechtsgebiet detection using `RECHTSGEBIET_KEYWORDS` from metadata_extractor. No LLM call. Returns `None` for non-legal queries.
+- **`query_rewriter.py`** — `LegalQueryRewriter`: LLM transforms a user query into 3 legal-search-friendly variants with § references and legal terminology. DeepSeek default, Anthropic failover, 5s timeout. Falls back to `[original_query]` on failure.
+- **`enhanced_search.py`** — `EnhancedLegalSearch`: Orchestrator calling classifier → rewriter → `search_multi_query()`. Returns `dict` with keys: `results`, `rewritten_queries`, `rechtsgebiet`, `retrieval_method`. Methods: `enhanced_search(query, top_k)`.
+
+**Env var**: `REWRITER_TIMEOUT` (default `5.0`) — LLM timeout for query rewriting.
 
 **Weighted Fusion**: Two independent Qdrant queries (dense + sparse "lexical", each `limit=top_k*3`), min-max normalized per result set, then merged with `DENSE_WEIGHT=0.7` / `SPARSE_WEIGHT=0.3`. Solves the sparse blind-spot problem where rare German legal compounds (e.g. "Sachmängel") got zero sparse weight under RRF. Docs only in one set get 0.0 for the other component.
 
@@ -147,6 +161,7 @@ Loads `documents.json`, applies filters, saves cleaned version, then full rebuil
 - `GET /api/legal/search?q=...&top_k=10&rechtsgebiet=...&gesetz=...`
 - `GET /api/legal/ask?q=...&top_k=5` — search + LEX persona LLM answer with citations
 - `GET /api/legal/ask/stream` — Server-Sent Events streaming
+- `GET /api/legal/ask/enhanced?q=...&top_k=5` — enhanced search pipeline (query rewrite + multi-query RRF) + LLM answer; returns `rewritten_queries` and `rechtsgebiet` alongside answer/citations
 - `GET /api/legal/related/{doc_id}` — knowledge graph references
 - `GET /api/legal/stats` — index statistics
 - `GET /` — LEX chat UI (HTML/JS SPA with dark theme, German)
@@ -175,4 +190,4 @@ Scrapes court rulings from rechtsprechung-im-internet.de via RSS feeds + XML ZIP
 - **Incremental indexing**: `insert_documents()` embeds only new docs. Partial scrapes append without re-embedding.
 - **`documents.json` is the source of truth**: All rebuilds read from it.
 - **`.env` file**: Local secrets only. Modal uses `my-deepseek-secret` / `my-anthropic-secret`.
-- **No test suite**: pytest installed but tests are stubs.
+- `REWRITER_TIMEOUT` env var (default `5.0`) für LLM-Timeout beim Query-Rewriting.

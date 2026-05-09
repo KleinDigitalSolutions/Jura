@@ -9,6 +9,7 @@ RECHTSGEBIET_KEYWORDS: dict[str, list[str]] = {
         "Bürgerliches Gesetzbuch", "BGB", "Kaufvertrag", "Schadensersatz", "Schadenersatz",
         "Mietrecht", "Werkvertrag", "Darlehen", "Bürgschaft", "Eigentum", "Besitz",
         "unerlaubte Handlung", "Vertrag", "Schuldverhältnis", "Sachenrecht", "Erbrecht",
+        "Kaution", "Vermieter", "Mieter", "Miete", "Mietsache",
     ],
     "Strafrecht": [
         "Strafgesetzbuch", "StGB", "Straftat", "Angeklagte", "Verurteilung", "Strafe",

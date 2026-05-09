@@ -135,23 +135,66 @@ def _build_meta_prefix(doc: dict) -> str:
 
 
 def _split_text_by_boundary(text: str, max_tokens: int) -> list[str]:
-    """Split text at sentence boundaries, respecting max_tokens per chunk."""
-    import re
-    sentences = re.split(r'(?<=[.!?])\s+', text)
+    """Split text at legal structure boundaries, respecting max_tokens per chunk.
 
+    German legal text structure differs from prose:
+    - Numbered lists: "1. ...; 2. ...; 3. ..." should stay together
+    - Absatz markers: "(1) ... (2) ..." are natural split points
+    - Semicolons often separate legal provisions within a sentence
+    - Simple period-based splitting breaks mid-provision
+
+    Priority split points (strongest first):
+    1. Absatz markers: "(1)", "(2)", etc.
+    2. Numbered list items: "1.", "2.", etc. (but only legal-style, not sentence-start)
+    3. Double newlines (paragraph breaks)
+    4. Semicolons followed by a capital letter (provision boundary)
+    5. Sentence boundaries as last resort
+    """
+    import re
+
+    # Strategy: split into "legal segments" first, then merge into chunks
+    # A legal segment is the text between two high-priority split points.
+
+    # Pattern for Absatz markers: (1), (2), (1a), etc.
+    absatz_pattern = re.compile(r'(?=\(\d+[a-z]?\)\s)', re.IGNORECASE)
+
+    # Pattern for numbered list items: "1. ", "2. " at start of line or after semicolon
+    # But NOT "1. Einleitung..." which is a normal sentence start
+    list_pattern = re.compile(r'(?<=;)\s*(?=\d+\.\s+[A-ZÄÖÜ])|(?<=\n)\s*(?=\d+\.\s+[A-ZÄÖÜ])')
+
+    # Try Absatz splitting first (most reliable for German law)
+    segments = absatz_pattern.split(text)
+
+    # If we only got 1 segment, try numbered list splitting
+    if len(segments) <= 1:
+        segments = list_pattern.split(text)
+
+    # If still 1 segment, try double-newline splitting
+    if len(segments) <= 1:
+        segments = re.split(r'\n\s*\n', text)
+
+    # If still 1 segment, fall back to semicolon boundaries
+    if len(segments) <= 1:
+        segments = re.split(r';\s*(?=[A-ZÄÖÜ])', text)
+
+    # If still 1 segment, fall back to sentence splitting (old behavior)
+    if len(segments) <= 1:
+        segments = re.split(r'(?<=[.!?])\s+', text)
+
+    # Merge segments into chunks respecting max_tokens
     chunks: list[str] = []
     current: list[str] = []
     current_tokens = 0
 
-    for sentence in sentences:
-        sent_tokens = estimate_tokens(sentence)
-        if current_tokens + sent_tokens > max_tokens and current:
+    for segment in segments:
+        seg_tokens = estimate_tokens(segment)
+        if current_tokens + seg_tokens > max_tokens and current:
             chunks.append(" ".join(current))
-            current = [sentence]
-            current_tokens = sent_tokens
+            current = [segment]
+            current_tokens = seg_tokens
         else:
-            current.append(sentence)
-            current_tokens += sent_tokens
+            current.append(segment)
+            current_tokens += seg_tokens
 
     if current:
         chunks.append(" ".join(current))

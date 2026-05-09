@@ -111,7 +111,12 @@ def build_legal_graph(documents: list[dict]) -> nx.DiGraph:
         for full_ref, ref_num in refs:
             tgt_id = f"{src_abk}||§ {ref_num}"
             matches = [pid for pid in para_index if pid.endswith(f"||§ {ref_num}")]
-            for tgt in matches if matches else ([tgt_id] if tgt_id in para_index else []):
+            # Only add edges to nodes that actually exist in the index.
+            # Dangling references (§ that doesn't exist) are logged but not added.
+            valid_targets = [tgt for tgt in (matches or [tgt_id]) if tgt in para_index]
+            if not valid_targets and matches:
+                logger.debug(f"Dangling § reference: {src_id} → {tgt_id} (not in index)")
+            for tgt in valid_targets:
                 if tgt != src_id and not g.has_edge(src_id, tgt):
                     g.add_edge(src_id, tgt, relation="verweist_auf", ref_text=full_ref)
 
@@ -430,6 +435,11 @@ class LegalSearcher:
         merged.sort(key=lambda x: x[1], reverse=True)
         return merged
 
+    # Max chars fed to cross-encoder — bge-reranker-v2-m3 supports 8192 tokens;
+    # 2048 chars ≈ 512 tokens, enough for most German legal paragraphs while
+    # keeping latency reasonable.  Was 512 chars which truncated decisive clauses.
+    RERANK_MAX_CHARS = int(os.getenv("RERANK_MAX_CHARS", "2048"))
+
     def _rerank(self, query: str, candidates: list[dict], top_k: int) -> list[dict]:
         """Rerank candidates with cross-encoder."""
         if len(candidates) <= 1:
@@ -439,7 +449,7 @@ class LegalSearcher:
         pairs: list[tuple[str, str]] = []
         for c in candidates:
             text = c.get("inhalt", "") or c.get("volltext", "") or ""
-            pairs.append((query, text[:512]))
+            pairs.append((query, text[:self.RERANK_MAX_CHARS]))
 
         scores = reranker.compute_score(pairs, normalize=True)
         if not isinstance(scores, list):
@@ -640,6 +650,66 @@ class LegalSearcher:
                 r["pid"] = neighbor
                 related.append(r)
         return related
+
+    def search_multi_query(
+        self,
+        queries: list[str],
+        top_k: int = 10,
+        rechtsgebiet: Optional[str] = None,
+        gesetz: Optional[str] = None,
+    ) -> list[dict]:
+        """Multi-query search with Reciprocal Rank Fusion (RRF).
+
+        Runs the full search() for each query independently, then merges
+        results via RRF (k=60). Deduplicates by pid, keeps highest RRF score.
+
+        Graceful degradation: if one query bombs, others still contribute.
+        """
+        if not queries:
+            return []
+
+        rrf_k = 60
+        # pid -> {doc_dict, rrf_score, seen_rank_counts}
+        merged: dict[str, dict] = {}
+
+        for query in queries:
+            if not query or not query.strip():
+                continue
+            try:
+                results = self.search(
+                    query,
+                    top_k=top_k,
+                    rechtsgebiet=rechtsgebiet,
+                    gesetz=gesetz,
+                )
+            except Exception:
+                logger.exception(f"Multi-query search failed for: {query!r}")
+                continue
+
+            for rank, doc in enumerate(results, 1):
+                pid = doc.get("pid", "")
+                if not pid:
+                    continue
+                rrf = 1.0 / (rrf_k + rank)
+                if pid in merged:
+                    merged[pid]["rrf_score"] += rrf
+                else:
+                    merged[pid] = dict(doc)
+                    merged[pid]["rrf_score"] = rrf
+                    merged[pid]["source_queries"] = 1
+                merged[pid].setdefault("source_queries", 0)
+                merged[pid]["source_queries"] += 1
+
+        if not merged:
+            return []
+
+        # Sort by RRF score descending, set final score
+        sorted_docs = sorted(merged.values(), key=lambda d: d["rrf_score"], reverse=True)
+        for doc in sorted_docs:
+            doc["score"] = round(doc["rrf_score"], 4)
+            doc["rrf_score"] = round(doc["rrf_score"], 4)
+
+        return sorted_docs[:top_k]
 
 
 # ---------------------------------------------------------------------------
