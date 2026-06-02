@@ -12,6 +12,8 @@ def test_chat_fallback_uses_enhanced_answer_pipeline_not_raw_search():
     assert "/api/legal/ask/enhanced" in html
     assert "/api/legal/search?q=" not in html
     assert "Hybrid-Index" not in html
+    assert "if (!answerText || !answerText.trim())" in html
+    assert "fallbackAsk(queryWithCase);" in html
 
 
 def test_chat_labels_answers_as_checked_analysis():

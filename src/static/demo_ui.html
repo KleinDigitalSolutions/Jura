@@ -1469,6 +1469,12 @@ async function handleSubmit() {
       model = data.model || 'deepseek-chat';
       currentModel = model;
 
+      if (!answerText || !answerText.trim()) {
+        es.close();
+        fallbackAsk(queryWithCase);
+        return;
+      }
+
       finalizeStreamingMessage(answerText, sources, model);
       es.close();
       sendBtn.disabled = false;
