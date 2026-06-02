@@ -118,12 +118,14 @@ ISSUE_PROFILES: tuple[LegalIssueProfile, ...] = (
             NormRef("BetrVG", "§ 102", "Betriebsratsanhörung vor Kündigung"),
         ),
         recommended_norms=(
+            NormRef("BGB", "§ 130", "Zugang empfangsbedürftiger Willenserklärungen"),
             NormRef("SGB IX", "§ 168", "Zustimmung des Integrationsamts bei Schwerbehinderung"),
         ),
         excluded_norms=(
             NormRef("BGB", "§ 580a", "Mietrechtliche Kündigungsfrist, nicht Arbeitsverhältnis"),
             NormRef("BetrVG", "§ 103", "Sonderfall außerordentliche Kündigung von Betriebsratsmitgliedern"),
             NormRef("SGB IX", "§ 175", "Erweiterter Beendigungsschutz, nicht die primäre Zustimmungsvorschrift bei ordentlicher Kündigung"),
+            NormRef("TzBfG", "§ 16", "Spezialfall unwirksamer Befristung, nicht allgemeine Anforderung der ordentlichen Kündigung"),
         ),
         allowed_laws=("BGB", "KSchG", "BetrVG", "SGB IX", "TzBfG", "MuSchG", "BEEG"),
         answer_focus=(

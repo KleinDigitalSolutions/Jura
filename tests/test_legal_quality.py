@@ -51,6 +51,7 @@ def test_retrieval_plan_detects_employee_ordinary_termination_profile():
 def test_apply_legal_quality_injects_required_sources_and_filters_false_positive():
     documents = [
         _law_doc("BGB", "§ 623", "Schriftform der Kündigung"),
+        _law_doc("BGB", "§ 130", "Wirksamwerden der Willenserklärung gegenüber Abwesenden"),
         _law_doc("BGB", "§ 622", "Kündigungsfristen bei Arbeitsverhältnissen"),
         _law_doc("KSchG", "§ 1", "Sozial ungerechtfertigte Kündigungen"),
         _law_doc("KSchG", "§ 4", "Anrufung des Arbeitsgerichtes"),
@@ -62,6 +63,7 @@ def test_apply_legal_quality_injects_required_sources_and_filters_false_positive
     initial_results = [
         _law_doc("BetrVG", "§ 102", "Mitbestimmung bei Kündigungen"),
         _law_doc("BGB", "§ 580a", "Kündigungsfristen"),
+        _law_doc("TzBfG", "§ 16", "Folgen unwirksamer Befristung"),
         {**_law_doc("InsO", "§ 126", "Beschlußverfahren zum Kündigungsschutz"), "rechtsgebiet": "Arbeitsrecht"},
     ]
 
@@ -75,8 +77,10 @@ def test_apply_legal_quality_injects_required_sources_and_filters_false_positive
 
     keys = {source_key(source) for source in qualified}
     assert ("BGB", "§ 580a") not in keys
+    assert ("TZBFG", "§ 16") not in keys
     assert ("INSO", "§ 126") not in keys
     assert {
+        ("BGB", "§ 130"),
         ("BGB", "§ 623"),
         ("BGB", "§ 622"),
         ("KSCHG", "§ 1"),
@@ -87,8 +91,10 @@ def test_apply_legal_quality_injects_required_sources_and_filters_false_positive
     }.issubset(keys)
     assert plan.has_profile
     assert "BGB § 580a" in [r["source"] for r in audit.rejected]
+    assert "TZBFG § 16" in [r["source"] for r in audit.rejected]
     assert "INSO § 126" in [r["source"] for r in audit.rejected]
     assert "BGB § 623" in audit.injected
+    assert "BGB § 130" in audit.injected
     assert "SGB IX § 168" in audit.injected
     assert audit.missing_required == []
 
@@ -96,6 +102,7 @@ def test_apply_legal_quality_injects_required_sources_and_filters_false_positive
 def test_enhanced_search_applies_legal_quality_layer():
     documents = [
         _law_doc("BGB", "§ 623", "Schriftform der Kündigung"),
+        _law_doc("BGB", "§ 130", "Wirksamwerden der Willenserklärung gegenüber Abwesenden"),
         _law_doc("BGB", "§ 622", "Kündigungsfristen bei Arbeitsverhältnissen"),
         _law_doc("KSchG", "§ 1", "Sozial ungerechtfertigte Kündigungen"),
         _law_doc("KSchG", "§ 4", "Anrufung des Arbeitsgerichtes"),
@@ -109,6 +116,7 @@ def test_enhanced_search_applies_legal_quality_layer():
     searcher.search_multi_query.return_value = [
         _law_doc("BetrVG", "§ 102", "Mitbestimmung bei Kündigungen"),
         _law_doc("BGB", "§ 580a", "Kündigungsfristen"),
+        _law_doc("TzBfG", "§ 16", "Folgen unwirksamer Befristung"),
         {**_law_doc("InsO", "§ 126", "Beschlußverfahren zum Kündigungsschutz"), "rechtsgebiet": "Arbeitsrecht"},
         {**_law_doc("BetrVG", "§ 99", "Mitbestimmung bei personellen Einzelmaßnahmen"), "context_type": "citation_kg"},
     ]
@@ -127,6 +135,8 @@ def test_enhanced_search_applies_legal_quality_layer():
     assert ("BGB", "§ 580a") not in keys
     assert ("BETRVG", "§ 99") not in keys
     assert ("INSO", "§ 126") not in keys
+    assert ("TZBFG", "§ 16") not in keys
+    assert ("BGB", "§ 130") in keys
     assert ("BGB", "§ 623") in keys
     assert ("KSCHG", "§ 1") in keys
     assert ("SGB IX", "§ 168") in keys
