@@ -645,7 +645,9 @@ class LegalSearcher:
                 continue
             seen.add(neighbor)
             if neighbor in self.indexer._para_index:
-                r = dict(self.indexer._para_index[neighbor])
+                indexed = self.indexer._para_index[neighbor]
+                r = dict(indexed["doc"])
+                r["doc_index"] = indexed["index"]
                 r["label"] = self.indexer._doc_label(r)
                 r["pid"] = neighbor
                 related.append(r)

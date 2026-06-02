@@ -13,7 +13,14 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Fill `.env` with `DEEPSEEK_API_KEY` and optionally `ANTHROPIC_API_KEY`.
+Fill `.env` or `.env.local` with `GEMINI_API_KEY`. The development default is:
+
+```bash
+LLM_PROVIDER=gemini
+GEMINI_MODEL=gemini-2.5-flash-lite
+```
+
+`gemini-2.5-flash-lite` is the preferred free-tier development model. DeepSeek and Anthropic can remain as optional paid/fallback providers.
 
 ## Rebuild Local Index
 
@@ -41,6 +48,7 @@ modal setup
 Create required secrets:
 
 ```bash
+modal secret create my-gemini-secret --from-dotenv .env.local --force
 modal secret create my-deepseek-secret DEEPSEEK_API_KEY=sk-...
 modal secret create my-anthropic-secret ANTHROPIC_API_KEY=sk-ant-...
 ```

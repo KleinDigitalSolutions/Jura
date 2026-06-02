@@ -11,6 +11,7 @@ venv/
 
 # Environment variables
 .env
+.env.local
 
 # Storage (built artifacts: Qdrant DB, documents.json, graph)
 legal_rag_storage/

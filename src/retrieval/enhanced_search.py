@@ -4,6 +4,7 @@ Combines query classification → query rewriting → multi-query RRF search
 into a single pipeline with graceful degradation at every stage.
 """
 import logging
+import re
 from typing import Optional
 
 from src.ingestion.rag_pipeline import LegalSearcher
@@ -11,6 +12,13 @@ from src.retrieval.query_classifier import LegalQueryClassifier
 from src.retrieval.query_rewriter import LegalQueryRewriter
 
 logger = logging.getLogger(__name__)
+
+QUERY_LAW_PATTERN = re.compile(
+    r"\b(BGB|StGB|HGB|ZPO|StPO|GG|VwVfG|AktG|GmbHG?|InsO|FamFG|"
+    r"BDSG|UrhG|MarkenG|PatG|BauGB|VwGO|AO|KStG|EStG|UStG|UmwG|WpHG|BetrVG|"
+    r"SGB|KSchG|BVerfGG|TKG|WEG|EGBGB|BGBEG|UWG|TTDSG|TDDDG)\b",
+    re.IGNORECASE,
+)
 
 
 class EnhancedLegalSearch:
@@ -86,6 +94,7 @@ class EnhancedLegalSearch:
             logger.exception("Query rewriting failed, falling back to single query")
 
         result["rewritten_queries"] = all_queries
+        query_laws = {m.upper() for m in QUERY_LAW_PATTERN.findall(query)}
 
         # Step 3: Search — multi-query or single
         if len(all_queries) > 1:
@@ -118,11 +127,12 @@ class EnhancedLegalSearch:
                 logger.exception("Fallback search also failed")
 
         # Step 4: Knowledge Graph expansion
-        # For each top-3 result, find related paragraphs via the 965K-edge graph
-        # and append them as citation context (score * 0.90, matching existing pattern)
+        # Add a small amount of cited context after the primary results. The
+        # answer builder can include these extra items as supporting citations.
         if result["results"]:
             try:
                 kg_expanded = list(result["results"])
+                original_count = len(kg_expanded)
                 seen_pids: set[str] = {
                     r.get("pid", "") for r in kg_expanded if r.get("pid")
                 }
@@ -132,16 +142,35 @@ class EnhancedLegalSearch:
                     except Exception:
                         continue
                     primary_score = doc.get("score", 0)
+                    primary_abk = doc.get("abkürzung", "")
+                    primary_rechtsgebiet = doc.get("rechtsgebiet", "")
                     for r_doc in related:
                         pid = r_doc.get("pid", "")
-                        if pid and pid not in seen_pids:
+                        text = (
+                            r_doc.get("inhalt", "")
+                            or r_doc.get("volltext", "")
+                            or r_doc.get("leitsatz", "")
+                        )
+                        related_abk = r_doc.get("abkürzung", "")
+                        related_rechtsgebiet = r_doc.get("rechtsgebiet", "")
+                        if query_laws and related_abk.upper() not in query_laws:
+                            continue
+                        same_law = primary_abk and related_abk and primary_abk == related_abk
+                        same_area = (
+                            primary_rechtsgebiet
+                            and related_rechtsgebiet
+                            and primary_rechtsgebiet == related_rechtsgebiet
+                        )
+                        if not (same_law or same_area):
+                            continue
+                        if pid and text and pid not in seen_pids:
                             new_doc = dict(r_doc)
                             new_doc["score"] = round(primary_score * 0.90, 4)
                             new_doc["context_type"] = "citation_kg"
                             kg_expanded.append(new_doc)
                             seen_pids.add(pid)
-                result["results"] = kg_expanded
-                result["kg_expanded_count"] = len(kg_expanded) - len(result["results"])
+                result["results"] = kg_expanded[: top_k + 3]
+                result["kg_expanded_count"] = max(0, len(kg_expanded) - original_count)
             except Exception:
                 logger.exception("Knowledge Graph expansion failed")
 

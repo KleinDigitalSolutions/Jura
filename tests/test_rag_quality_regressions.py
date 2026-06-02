@@ -75,3 +75,98 @@ def test_enhanced_search_reports_kg_expansion_count():
 
     assert result["kg_expanded_count"] == 1
     assert result["results"][1]["context_type"] == "citation_kg"
+
+
+def test_enhanced_search_skips_empty_kg_documents():
+    primary = {
+        "pid": "BGB||§ 242",
+        "score": 0.9,
+        "abkürzung": "BGB",
+        "paragraph": "§ 242",
+        "inhalt": "Treu und Glauben",
+    }
+    empty_related = {"pid": "BGB||§ 241"}
+
+    searcher = MagicMock()
+    searcher.search_multi_query.return_value = [primary]
+    searcher.get_related.return_value = [empty_related]
+    rewriter = MagicMock()
+    rewriter.rewrite.return_value = ["Treu und Glauben § 242 BGB"]
+    classifier = MagicMock()
+    classifier.classify.return_value = "Zivilrecht"
+
+    result = EnhancedLegalSearch(searcher, rewriter, classifier).enhanced_search(
+        "Was bedeutet Treu und Glauben?",
+        top_k=1,
+    )
+
+    assert result["kg_expanded_count"] == 0
+    assert len(result["results"]) == 1
+
+
+def test_enhanced_search_skips_cross_area_kg_documents():
+    primary = {
+        "pid": "BGB||§ 242",
+        "score": 0.9,
+        "abkürzung": "BGB",
+        "paragraph": "§ 242",
+        "rechtsgebiet": "Zivilrecht",
+        "inhalt": "Treu und Glauben",
+    }
+    unrelated = {
+        "pid": "StGB||§ 245",
+        "abkürzung": "StGB",
+        "paragraph": "§ 245",
+        "rechtsgebiet": "Strafrecht",
+        "inhalt": "Führungsaufsicht",
+    }
+
+    searcher = MagicMock()
+    searcher.search_multi_query.return_value = [primary]
+    searcher.get_related.return_value = [unrelated]
+    rewriter = MagicMock()
+    rewriter.rewrite.return_value = ["Treu und Glauben § 242 BGB"]
+    classifier = MagicMock()
+    classifier.classify.return_value = "Zivilrecht"
+
+    result = EnhancedLegalSearch(searcher, rewriter, classifier).enhanced_search(
+        "Was bedeutet Treu und Glauben?",
+        top_k=1,
+    )
+
+    assert result["kg_expanded_count"] == 0
+    assert len(result["results"]) == 1
+
+
+def test_enhanced_search_limits_kg_to_explicit_query_law():
+    primary = {
+        "pid": "BGB||§ 242",
+        "score": 0.9,
+        "abkürzung": "BGB",
+        "paragraph": "§ 242",
+        "rechtsgebiet": "Zivilrecht",
+        "inhalt": "Treu und Glauben",
+    }
+    cross_law = {
+        "pid": "HGB||§ 166",
+        "abkürzung": "HGB",
+        "paragraph": "§ 166",
+        "rechtsgebiet": "Zivilrecht",
+        "inhalt": "Informationsrecht der Kommanditisten",
+    }
+
+    searcher = MagicMock()
+    searcher.search_multi_query.return_value = [primary]
+    searcher.get_related.return_value = [cross_law]
+    rewriter = MagicMock()
+    rewriter.rewrite.return_value = ["Treu und Glauben § 242 BGB"]
+    classifier = MagicMock()
+    classifier.classify.return_value = "Zivilrecht"
+
+    result = EnhancedLegalSearch(searcher, rewriter, classifier).enhanced_search(
+        "Was bedeutet Treu und Glauben nach § 242 BGB?",
+        top_k=1,
+    )
+
+    assert result["kg_expanded_count"] == 0
+    assert len(result["results"]) == 1

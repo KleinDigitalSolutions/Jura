@@ -6,6 +6,7 @@ Test:    curl https://aliundmaggy--legal-rag-fastapi-app.modal.run/api/legal/sea
 
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -27,6 +28,7 @@ VOLUME_PATH = Path("/legal_rag_storage")
 # Secrets
 DEEPSEEK_SECRET = modal.Secret.from_name("my-deepseek-secret")
 ANTHROPIC_SECRET = modal.Secret.from_name("my-anthropic-secret")
+GEMINI_SECRET = modal.Secret.from_name("my-gemini-secret")
 
 # Models
 EMBEDDING_MODEL = "BAAI/bge-m3"
@@ -43,6 +45,7 @@ image = (
         "loguru>=0.7.0",
         "openai>=1.0.0",          # DeepSeek API (OpenAI-compatible)
         "anthropic>=0.30.0",      # Claude API
+        "google-genai>=1.0.0",    # Gemini API
         "aiohttp>=3.9.0",
         "beautifulsoup4>=4.12.0",
         "lxml>=5.0.0",
@@ -128,7 +131,7 @@ ABSOLUT VERBOTEN
 @app.cls(
     image=image,
     volumes={VOLUME_PATH: VOLUME},
-    secrets=[DEEPSEEK_SECRET, ANTHROPIC_SECRET],
+    secrets=[DEEPSEEK_SECRET, ANTHROPIC_SECRET, GEMINI_SECRET],
     gpu="T4",
 )
 @modal.concurrent(max_inputs=10)
@@ -195,7 +198,7 @@ class LegalRAG:
 
     @modal.method()
     def generate_answer(self, query: str, top_k: int = 5) -> dict:
-        """Search + LLM answer with citations. Provider-switchable (deepseek/anthropic)."""
+        """Search + LLM answer with citations. Provider-switchable."""
         search_results = self.searcher.search(query, top_k=top_k)
 
         if not search_results:
@@ -203,73 +206,23 @@ class LegalRAG:
 
         user_prompt, citations = _build_ask_context(search_results, query, top_k)
 
-        # Failover mechanism: Try preferred provider first, then alternate
-        provider = os.getenv("LLM_PROVIDER", "deepseek")
-        providers = [provider]
-        if provider == "deepseek":
-            providers.append("anthropic")
-        else:
-            providers.append("deepseek")
-
         last_error = ""
-        for p in providers:
-            if p == "anthropic":
-                try:
-                    from anthropic import Anthropic
-                    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-                    if not api_key:
-                        continue
-                    client = Anthropic(api_key=api_key)
-                    response = client.messages.create(
-                        model="claude-3-5-sonnet-latest",
-                        max_tokens=2000,
-                        temperature=0.2,
-                        system=LEX_SYSTEM_PROMPT,
-                        messages=[{"role": "user", "content": user_prompt}],
-                    )
-                    raw_answer = response.content[0].text.strip()
-                    answer, warnings = _verify_citations(raw_answer, citations)
-                    return {
-                        "answer": answer,
-                        "citations": citations,
-                        "model": "claude-3-5-sonnet",
-                        "citation_warnings": warnings,
-                    }
-                except Exception as e:
-                    last_error = f"Anthropic error: {e}"
-                    continue
-            else:
-                try:
-                    from openai import OpenAI
-                    api_key = os.getenv("DEEPSEEK_API_KEY", "")
-                    if not api_key:
-                        continue
-                    client = OpenAI(
-                        api_key=api_key,
-                        base_url="https://api.deepseek.com",
-                    )
-                    response = client.chat.completions.create(
-                        model="deepseek-chat",
-                        temperature=0.2,
-                        messages=[
-                            {"role": "system", "content": LEX_SYSTEM_PROMPT},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                    )
-                    raw_answer = response.choices[0].message.content.strip()
-                    answer, warnings = _verify_citations(raw_answer, citations)
-                    return {
-                        "answer": answer,
-                        "citations": citations,
-                        "model": "deepseek-chat",
-                        "citation_warnings": warnings,
-                    }
-                except Exception as e:
-                    last_error = f"DeepSeek error: {e}"
-                    continue
+        for p in _provider_order(os.getenv("LLM_PROVIDER", "gemini")):
+            try:
+                raw_answer, model = _call_llm_provider(p, user_prompt)
+                answer, warnings = _verify_citations(raw_answer, citations)
+                return {
+                    "answer": answer,
+                    "citations": citations,
+                    "model": model,
+                    "citation_warnings": warnings,
+                }
+            except Exception as e:
+                last_error = f"{p}: {e}"
+                continue
 
         return {
-            "answer": f"KI-Schnittstellen (DeepSeek & Claude) sind derzeit nicht erreichbar. Bitte versuchen Sie es in Kürze erneut. ({last_error})",
+            "answer": f"KI-Schnittstellen sind derzeit nicht erreichbar. Bitte versuchen Sie es in Kürze erneut. ({last_error})",
             "citations": citations,
             "model": "error",
         }
@@ -278,16 +231,44 @@ class LegalRAG:
 # ---------------------------------------------------------------------------
 # Shared helpers for answer generation
 # ---------------------------------------------------------------------------
+QUERY_LAW_PATTERN = re.compile(
+    r"\b(BGB|StGB|HGB|ZPO|StPO|GG|VwVfG|AktG|GmbHG?|InsO|FamFG|"
+    r"BDSG|UrhG|MarkenG|PatG|BauGB|VwGO|AO|KStG|EStG|UStG|UmwG|WpHG|BetrVG|"
+    r"SGB|KSchG|BVerfGG|TKG|WEG|EGBGB|BGBEG|UWG|TTDSG|TDDDG)\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_query_laws(query: str) -> set[str]:
+    laws = {m.upper() for m in QUERY_LAW_PATTERN.findall(query or "")}
+    if "GMBH" in laws:
+        laws.add("GMBHG")
+    return laws
+
+
 def _build_ask_context(search_results: list, query: str, top_k: int = 5):
     """Build LLM prompt and citations from search results."""
     context_parts: list[str] = []
     citations: list[dict] = []
-    for i, r in enumerate(search_results[:top_k], 1):
+    query_laws = _extract_query_laws(query)
+    selected_results: list[dict] = []
+    for r in search_results:
+        abk = r.get("abkürzung", "")
+        text = r.get("inhalt", "") or r.get("volltext", "") or r.get("leitsatz", "")
+        if not text:
+            continue
+        if r.get("context_type") == "citation_kg" and query_laws and abk.upper() not in query_laws:
+            continue
+        selected_results.append(r)
+        if len(selected_results) >= top_k:
+            break
+
+    for i, r in enumerate(selected_results, 1):
         cite_id = f"[{i}]"
         abk = r.get("abkürzung", "")
         para = r.get("paragraph", "")
         titel = r.get("paragraph_titel", "")
-        inhalt = r.get("inhalt", "") or r.get("volltext", "") or ""
+        inhalt = r.get("inhalt", "") or r.get("volltext", "") or r.get("leitsatz", "")
         stand = r.get("stand", "")
 
         # Inform the LLM about the context type
@@ -341,6 +322,98 @@ WICHTIG: Falls ein Gesetzestext mit "⚠️ ÄLTER ALS 2 JAHRE" markiert ist,
 weise den Mandanten darauf hin, dass Änderungen möglich sind und der 
 aktuelle Stand geprüft werden muss."""
     return user_prompt, citations
+
+
+def _provider_order(provider: str) -> list[str]:
+    """Return provider fallback order. Anthropic is opt-in because it may be out of credit."""
+    primary = (provider or "gemini").strip().lower()
+    orders = {
+        "gemini": ["gemini", "deepseek"],
+        "deepseek": ["deepseek", "gemini"],
+        "anthropic": ["anthropic", "gemini", "deepseek"],
+    }
+    order = orders.get(primary, ["gemini", "deepseek"])
+    seen: set[str] = set()
+    return [p for p in order if not (p in seen or seen.add(p))]
+
+
+def _call_llm_provider(provider: str, user_prompt: str) -> tuple[str, str]:
+    """Call one configured LLM provider and return (answer_text, model_name)."""
+    if provider == "gemini":
+        return _call_gemini(user_prompt)
+    if provider == "anthropic":
+        return _call_anthropic(user_prompt)
+    if provider == "deepseek":
+        return _call_deepseek(user_prompt)
+    raise ValueError(f"Unsupported LLM provider: {provider}")
+
+
+def _call_gemini(user_prompt: str) -> tuple[str, str]:
+    """Call Gemini Developer API. Defaults to the free-tier-friendly Flash-Lite model."""
+    from google import genai
+    from google.genai import types
+
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY missing")
+
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model=model,
+        contents=user_prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=LEX_SYSTEM_PROMPT,
+            temperature=0.2,
+            max_output_tokens=2000,
+        ),
+    )
+    text = (response.text or "").strip()
+    if not text:
+        raise RuntimeError("Gemini returned empty response")
+    return text, model
+
+
+def _call_anthropic(user_prompt: str) -> tuple[str, str]:
+    from anthropic import Anthropic
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY missing")
+
+    model = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest")
+    client = Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model=model,
+        max_tokens=2000,
+        temperature=0.2,
+        system=LEX_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    return response.content[0].text.strip(), model
+
+
+def _call_deepseek(user_prompt: str) -> tuple[str, str]:
+    from openai import OpenAI
+
+    api_key = os.getenv("DEEPSEEK_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("DEEPSEEK_API_KEY missing")
+
+    model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://api.deepseek.com",
+    )
+    response = client.chat.completions.create(
+        model=model,
+        temperature=0.2,
+        messages=[
+            {"role": "system", "content": LEX_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+    return response.choices[0].message.content.strip(), model
 
 
 def _verify_citations(answer: str, citations: list[dict]) -> tuple[str, list[str]]:
@@ -488,20 +561,18 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                 "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
             }) + "\n\n"
 
-            # Failover mechanism for streaming
-            provider = os.getenv("LLM_PROVIDER", "deepseek")
-            providers = [provider]
-            if provider == "deepseek":
-                providers.append("anthropic")
-            else:
-                providers.append("deepseek")
-
             last_error = ""
             success = False
             answer_parts: list[str] = []
-            for p in providers:
+            for p in _provider_order(os.getenv("LLM_PROVIDER", "gemini")):
                 try:
-                    if p == "anthropic":
+                    if p == "gemini":
+                        text, model_used = _call_gemini(user_prompt)
+                        answer_parts.append(text)
+                        yield "event: token\ndata: " + json.dumps(text) + "\n\n"
+                        success = True
+                        break
+                    elif p == "anthropic":
                         from anthropic import Anthropic
                         api_key = os.getenv("ANTHROPIC_API_KEY", "")
                         if not api_key: continue
@@ -545,7 +616,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                         success = True
                         break
                 except Exception as e:
-                    last_error = str(e)
+                    last_error = f"{p}: {e}"
                     continue
 
             if not success:
@@ -606,51 +677,13 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
     context_k = min(len(search_results), top_k + 3)
     user_prompt, citations = _build_ask_context(search_results, q, context_k)
 
-    # Provider failover (gleiches Pattern wie generate_answer)
-    provider = os.getenv("LLM_PROVIDER", "deepseek")
-    providers = [provider, "anthropic" if provider == "deepseek" else "deepseek"]
-
     last_error = ""
     answer_text = ""
     model_used = ""
-    for p in providers:
+    for p in _provider_order(os.getenv("LLM_PROVIDER", "gemini")):
         try:
-            if p == "anthropic":
-                from anthropic import Anthropic
-                api_key = os.getenv("ANTHROPIC_API_KEY", "")
-                if not api_key:
-                    continue
-                client = Anthropic(api_key=api_key)
-                resp = client.messages.create(
-                    model="claude-3-5-sonnet-latest",
-                    max_tokens=2000,
-                    temperature=0.2,
-                    system=LEX_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": user_prompt}],
-                )
-                answer_text = resp.content[0].text.strip()
-                model_used = "claude-3-5-sonnet"
-                break
-            else:
-                from openai import OpenAI
-                api_key = os.getenv("DEEPSEEK_API_KEY", "")
-                if not api_key:
-                    continue
-                client = OpenAI(
-                    api_key=api_key,
-                    base_url="https://api.deepseek.com",
-                )
-                resp = client.chat.completions.create(
-                    model="deepseek-chat",
-                    temperature=0.2,
-                    messages=[
-                        {"role": "system", "content": LEX_SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                )
-                answer_text = resp.choices[0].message.content.strip()
-                model_used = "deepseek-chat"
-                break
+            answer_text, model_used = _call_llm_provider(p, user_prompt)
+            break
         except Exception as e:
             last_error = f"{p}: {e}"
             continue
@@ -722,7 +755,7 @@ async def index():
 @app.function(
     image=image,
     volumes={VOLUME_PATH: VOLUME},
-    secrets=[DEEPSEEK_SECRET, ANTHROPIC_SECRET],
+    secrets=[DEEPSEEK_SECRET, ANTHROPIC_SECRET, GEMINI_SECRET],
 )
 @modal.asgi_app()
 def fastapi_app():
