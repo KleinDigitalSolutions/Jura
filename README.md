@@ -1,248 +1,304 @@
+<div align="center">
+
 # Legal RAG — German Law Search & Q&A
 
-Hybrid search engine for German federal law: 17,024 indexed documents from 74 laws + court ruling chunks from 398 Urteilen (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG) indexed with bge-m3 (dense + learned sparse) + cross-encoder reranker. Deployed on Modal as a FastAPI web app with LEX/JURA legal assistant persona (Gemini Flash-Lite default for development, DeepSeek/Claude optional).
+**[Live Demo: legal-rag-fastapi-app.modal.run](https://aliundmaggy--legal-rag-fastapi-app.modal.run)**
 
-**Live**: [legal-rag-fastapi-app.modal.run](https://aliundmaggy--legal-rag-fastapi-app.modal.run)
+**A production-oriented German legal retrieval and analysis system for law-firm workflows.**
+
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-ASGI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Modal](https://img.shields.io/badge/Modal-GPU_Deployment-7C3AED?style=for-the-badge)](https://modal.com/)
+[![Qdrant](https://img.shields.io/badge/Qdrant-Hybrid_Search-DC244C?style=for-the-badge)](https://qdrant.tech/)
+[![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash_Lite-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Pytest](https://img.shields.io/badge/Tests-52_Passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
+
+</div>
+
+---
+
+## Overview
+
+**Legal RAG** is a hybrid retrieval-augmented generation platform for German law. It indexes German federal statutes and selected court decisions, combines dense and sparse semantic search with cross-encoder reranking, and generates citation-grounded legal analyses through a deterministic quality layer.
+
+The goal is not a generic chatbot. The system is designed as a **law-firm research and first-analysis tool**: it classifies legal issues, retrieves mandatory legal sources, removes known false positives, and exposes auditable metadata such as `retrieval_plan` and `source_audit`.
+
+Current live index:
+
+- **17,024** indexed documents
+- **74** German federal laws
+- **16,242** law paragraphs
+- **782** court-decision chunks
+- **398** unique court decisions
+- **201** unique BGH decisions
+
+> This project is a technical portfolio showcase. It is not a substitute for legal advice.
+
+---
+
+## Core Capabilities
+
+### Legal Hybrid Search
+
+- Dense semantic retrieval with `BAAI/bge-m3`
+- Learned sparse vectors for exact legal terminology
+- Weighted dense/sparse fusion with Qdrant
+- Cross-encoder reranking via `BAAI/bge-reranker-v2-m3`
+- Exact paragraph pinning for queries like `§ 242 BGB`
+- Automatic law filtering for abbreviations such as `BGB`, `KSchG`, `StGB`, `InsO`
+
+### German Legal Corpus
+
+- Scrapes laws from [gesetze-im-internet.de](https://www.gesetze-im-internet.de)
+- Scrapes court decisions from [rechtsprechung-im-internet.de](https://www.rechtsprechung-im-internet.de)
+- Covers BGH, BVerfG, BVerwG, BFH, BAG, BSG, and BPatG
+- Stores structured metadata: law abbreviation, paragraph, title, legal area, date, court, file number
+- Builds a NetworkX knowledge graph from paragraph references
+
+### Deterministic Legal Quality Layer
+
+The most important production hardening is implemented in `src/retrieval/legal_quality.py`.
+
+For recognized issue profiles, the system:
+
+- injects mandatory legal sources before answer generation
+- removes known false positives from the context
+- restricts sources to allowed legal source families
+- returns an auditable `source_audit`
+- returns a structured `retrieval_plan`
+
+Example: for ordinary employee termination, the system requires or recommends:
+
+- `BGB § 623` — written form
+- `BGB § 130` — receipt/access of declarations
+- `BGB § 622` — notice periods
+- `KSchG §§ 1, 4, 23` — dismissal protection, claim deadline, scope
+- `BetrVG § 102` — works council hearing
+- `SGB IX § 168` — disability-related approval requirement
+
+It filters unrelated or misleading sources such as `BGB § 580a`, `BetrVG § 103`, `SGB IX § 175`, and `TzBfG § 16` for that profile.
+
+### LEX Chat Interface
+
+- FastAPI web UI served from Modal
+- Server-Sent Events streaming endpoint
+- Gemini development provider with DeepSeek and Claude fallback support
+- Citation cards with source previews
+- Dark law-firm-style interface
+- Chat fallback always routes through the enhanced analysis pipeline, never raw search output
+
+---
 
 ## Architecture
 
+```text
+gesetze-im-internet.de          rechtsprechung-im-internet.de
+        |                                  |
+        v                                  v
+  GesetzeScraper                    UrteileScraper
+        |                                  |
+        +---------------+------------------+
+                        v
+        Cleaner -> MetadataExtractor -> Chunker
+                        |
+                        v
+                 LegalRAGPipeline
+                        |
+        +---------------+------------------+
+        |                                  |
+        v                                  v
+  bge-m3 embeddings                 NetworkX legal graph
+ dense + learned sparse             paragraph references
+        |
+        v
+ Qdrant local collection
+        |
+        v
+ Weighted fusion -> Cross-encoder reranker
+        |
+        v
+ EnhancedLegalSearch
+ classify -> rewrite -> RRF -> quality audit
+        |
+        v
+ FastAPI / Modal / LEX UI
 ```
-gesetze-im-internet.de (XML ZIPs)    rechtsprechung-im-internet.de (RSS + XML)
-        │                                        │
-        ▼                                        ▼
-  GesetzeScraper ────────► raw docs       UrteileScraper ────────► raw docs
-        │                                        │
-        └────────────────┬───────────────────────┘
-                         ▼
-               Processors (clean → metadata → chunk Urteile)
-                         │
-                         ▼
-               LegalRAGPipeline
-                         │
-                         ├──► LegalEmbedder (bge-m3) ──► Qdrant (1024-dim dense + learned sparse)
-                         │                                      │
-                         │                                      ▼
-                         │                              Weighted Fusion (0.7 dense / 0.3 sparse)
-                         │                                      │
-                         │                                      ▼
-                         │                              FlagReranker (bge-reranker-v2-m3)
-                         │
-                         └──► NetworkX DiGraph ──► legal_graph.graphml (§ references)
-```
 
-**No LLM during indexing** — regex §-parser for knowledge graph edges. Current Modal index: 16,242 law paragraphs + 782 ruling chunks.
+| Layer | Technology |
+|---|---|
+| Runtime | Python 3.12 |
+| API | FastAPI ASGI |
+| Deployment | Modal, GPU T4, persistent Volume |
+| Vector Search | Qdrant local mode |
+| Embeddings | `BAAI/bge-m3` dense + sparse |
+| Reranking | `BAAI/bge-reranker-v2-m3` |
+| Legal Graph | NetworkX GraphML |
+| LLM Providers | Gemini, DeepSeek, Anthropic |
+| Tests | Pytest |
 
-| Component | Technology |
-|-----------|-----------|
-| Embeddings | `BAAI/bge-m3` via FlagEmbedding (1024-dim dense + learned sparse) |
-| Vector DB | Qdrant local mode (SQLite), named sparse vectors |
-| Fusion | Weighted (0.7 dense / 0.3 sparse, min-max normalized) |
-| Reranker | `BAAI/bge-reranker-v2-m3` cross-encoder via FlagEmbedding |
-| Knowledge Graph | NetworkX DiGraph, regex §-Verweis parser (965K edges) |
-| LLM (Q&A) | Gemini `gemini-2.5-flash-lite` default for development; DeepSeek/Claude optional via `LLM_PROVIDER` |
-| Deployment | Modal (FastAPI ASGI, Volume, GPU T4, Cron) |
+---
 
-## Quick Start
+## API Endpoints
+
+| Route | Purpose |
+|---|---|
+| `GET /` | LEX chat UI |
+| `GET /api/legal/search` | Raw hybrid retrieval |
+| `GET /api/legal/ask` | Search + generated answer |
+| `GET /api/legal/ask/stream` | Streaming legal analysis |
+| `GET /api/legal/ask/enhanced` | Enhanced retrieval + quality audit + generated answer |
+| `GET /api/legal/related/{doc_id}` | Knowledge-graph related paragraphs |
+| `GET /api/legal/stats` | Index statistics |
+
+Live endpoint:
 
 ```bash
-cd /Users/bucci369/legal-rag-ingestion
+curl --get "https://aliundmaggy--legal-rag-fastapi-app.modal.run/api/legal/ask/enhanced" \
+  --data-urlencode "q=Welche Anforderungen gelten für eine ordentliche Kündigung eines Arbeitnehmers?" \
+  --data-urlencode "top_k=8"
+```
+
+---
+
+## Project Structure
+
+```text
+.
+├── main.py                         # CLI entry point
+├── modal_deploy.py                 # Modal FastAPI deployment + LEX persona
+├── rebuild_clean.py                # index cleanup and rebuild logic
+├── src/
+│   ├── scrapers/                   # German laws, rulings, EUR-Lex scaffold
+│   ├── processors/                 # cleaning, metadata, chunking
+│   ├── ingestion/rag_pipeline.py   # embeddings, Qdrant, fusion, reranking
+│   ├── retrieval/
+│   │   ├── enhanced_search.py      # classify -> rewrite -> RRF -> quality layer
+│   │   ├── legal_quality.py        # deterministic source profiles and audits
+│   │   ├── query_classifier.py
+│   │   └── query_rewriter.py
+│   ├── scheduler/
+│   └── static/demo_ui.html
+├── tests/
+│   ├── test_legal_quality.py
+│   ├── test_demo_ui.py
+│   └── test_retrieval_quality.py
+├── scripts/
+└── requirements.txt
+```
+
+Runtime storage is expected under `legal_rag_storage/` or `$LEGAL_RAG_STORAGE`.
+
+---
+
+## Local Development
+
+### Prerequisites
+
+- Python 3.12
+- Modal account for deployment
+- Gemini API key for development answers
+- Local/residential network for scraping German legal sources
+
+### Setup
+
+```bash
+python -m venv .venv
 source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-# Scrape + index German federal laws (~2 min scrape + ~58 min index on CPU)
-python main.py --run-gesetze
+### Environment
 
-# CLI search
+```env
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.5-flash-lite
+LLM_PROVIDER=gemini
+
+DEEPSEEK_API_KEY=...
+ANTHROPIC_API_KEY=...
+
+LEGAL_RAG_STORAGE=legal_rag_storage
+EMBEDDING_MODEL_NAME=BAAI/bge-m3
+RERANKER_MODEL_NAME=BAAI/bge-reranker-v2-m3
+```
+
+### CLI Usage
+
+```bash
+python main.py --stats
 python main.py --search "Treu und Glauben" --top-k 5
 python main.py --search "§ 242 BGB" --gesetz BGB
-
-# Show stats
-python main.py --stats
+python main.py --run-gesetze
+python main.py --run-urteile
 ```
 
-## Search Features
+---
 
-**Weighted Fusion** — Dense (1024-dim) + learned sparse vectors fused with 0.7/0.3 weights, min-max normalized per result set. Handles rare German legal compounds that sparse vectors alone miss.
-
-**Cross-encoder Reranker** — `bge-reranker-v2-m3` jointly scores (query, document) pairs. Takes top-k*3 weighted fusion candidates, reranks, returns top-k. Results include both `score` (weighted fusion) and `rerank_score` (cross-encoder).
-
-**§-reference pinning** — Queries containing explicit paragraph references (`§ 242`, `§ 823 BGB`) pin the exact match to #1 with score 1.0.
-
-**Law auto-filter** — Queries mentioning known law abbreviations (BGB, StGB, GmbH, HGB, ZPO, etc.) automatically restrict vector search to that law's paragraphs. "GmbH Geschäftsführer Pflichten" → only GmbHG paragraphs searched.
-
-## Data Pipeline
-
-### Scraping
-- **Gesetze**: [gesetze-im-internet.de](https://www.gesetze-im-internet.de)
-- **Method**: Parse Teilliste index → download XML ZIP per law → extract paragraphs from `metadaten/enbez` + text from `textdaten/text/P`
-- **Rate limiting**: 1 req/s, retry with exponential backoff (max 3)
-- **74 laws**: GG, BGB, StGB, HGB, ZPO, GmbHG, AktG, VwVfG, InsO, SGB I–XII, and more
-- **Urteile**: [rechtsprechung-im-internet.de](https://www.rechtsprechung-im-internet.de)
-- **Method**: RSS feed → XML ZIP per ruling → extract Leitsatz, Tenor, Tatbestand, Entscheidungsgründe
-- **Courts**: BGH (201), BVerfG (29), BVerwG (54), BFH (56), BAG (29), BSG (24), BPatG (5)
-- **Priority**: BGH Zivilsenat > BGH Strafsenat > BVerfG
-- **Chunking**: Urteile only — Leitsatz as own chunk, then sliding window (1000/200 token) on Tatbestand/Entscheidungsgründe
-
-### Processing
-1. **Clean** — HTML→text via BeautifulSoup+lxml, normalize § symbols
-2. **Metadata** — extract legal area (10 categories), paragraph references, normalize dates
-3. **Chunk** — Gesetze: 1 paragraph = 1 doc (no chunking). Urteile: Leitsatz + sliding window (1000/200 token) on Tatbestand + Entscheidungsgründe sections
-
-### Indexing
-All indexes rebuilt together from `documents.json`. No incremental updates.
-
-### Data Quality Filters
-Applied by `rebuild_clean.py`:
-
-| Filter | Removes |
-|--------|---------|
-| `inhalt` in ("-", "(weggefallen)", "(aufgehoben)") | Repealed placeholder paragraphs |
-| `inhalt.startswith("-")` | Repeal notes with text after dash |
-| `paragraph` starts with BJNR/BJNG | XML node IDs (preambles) |
-| `paragraph` contains "Inhaltsübersicht" | Table of contents entries |
-| `abkürzung` starts with "./" | Unofficial TOC |
-
-**Current Modal index: 17,024 documents** — 16,242 law paragraphs + 782 ruling chunks.
-
-## Storage
-
-```
-legal_rag_storage/
-├── documents.json          ← 17,024 docs, all structured fields
-├── legal_graph.graphml     ← NetworkX DiGraph (965K edges)
-└── qdrant/                 ← Qdrant local mode (~280 MB, 1024-dim + sparse)
-```
-
-Path set via `$LEGAL_RAG_STORAGE` env var.
-
-## Modal Deployment
+## Deployment
 
 ```bash
-# Deploy
+modal setup
 modal deploy modal_deploy.py
+```
 
-# Upload rebuilt index after local scrape (remote path relative to Volume root)
+Upload a rebuilt index to the Modal Volume:
+
+```bash
 modal volume put legal-rag-data documents.json legal_rag_storage/documents.json
 modal volume put legal-rag-data legal_graph.graphml legal_rag_storage/legal_graph.graphml
 modal volume put legal-rag-data qdrant/meta.json legal_rag_storage/qdrant/meta.json
 modal volume put legal-rag-data qdrant/collection/legal_docs/storage.sqlite legal_rag_storage/qdrant/collection/legal_docs/storage.sqlite
 ```
 
-### API Endpoints
+Modal configuration:
 
-| Route | Description |
-|-------|-------------|
-| `GET /api/legal/search?q=...&top_k=10&rechtsgebiet=...&gesetz=...` | Weighted fusion search + reranker |
-| `GET /api/legal/ask?q=...&top_k=5` | Search + LEX persona LLM answer with citations |
-| `GET /api/legal/ask/stream` | Server-Sent Events streaming |
-| `GET /api/legal/ask/enhanced?q=...&top_k=5` | Enhanced search (query rewrite + multi-query RRF) + LLM answer |
-| `GET /api/legal/related/{doc_id}` | Knowledge graph references (bidirectional) |
-| `GET /api/legal/stats` | Index statistics |
-| `GET /` | LEX chat UI (dark theme, mobile-responsive) |
+- App: `legal-rag`
+- Volume: `legal-rag-data`
+- Secrets: `my-gemini-secret`, `my-deepseek-secret`, `my-anthropic-secret`
+- GPU: T4
+- Live URL: [https://aliundmaggy--legal-rag-fastapi-app.modal.run](https://aliundmaggy--legal-rag-fastapi-app.modal.run)
 
-### Infrastructure
-- **Image**: Debian slim Python 3.12 + pre-downloaded bge-m3 + reranker models
-- **GPU**: T4 (recommended for bge-m3 + reranker inference)
-- **Volume**: `legal-rag-data` at `/legal_rag_storage` (persistent)
-- **Secrets**: `my-gemini-secret` (Gemini API key), `my-deepseek-secret` (optional), `my-anthropic-secret` (optional)
-- **Concurrency**: max 10 inputs per container
-- **Cron**: Local macOS launchd (Saturday 04:00 CET) — scrapes residential, uploads to Volume. `scripts/weekly_scrape.sh`
+---
 
-### LLM Provider Switch
-
-Set `LLM_PROVIDER` env var to switch providers. Development default is Gemini Flash-Lite:
+## Testing & Validation
 
 ```bash
-# Gemini free-tier development default
-LLM_PROVIDER=gemini
-GEMINI_MODEL=gemini-2.5-flash-lite
-
-# DeepSeek optional fallback
-LLM_PROVIDER=deepseek
-
-# Claude optional fallback (requires Anthropic credit)
-LLM_PROVIDER=anthropic
-```
-
-On Modal, set via Secret or environment variable in `modal_deploy.py`.
-
-### Enhanced Search (Query Rewriting + Multi-Query RRF)
-
-The `/api/legal/ask/enhanced` endpoint runs an additional pipeline before the standard search:
-
-1. **Query Classification** — fast keyword-based Rechtsgebiet detection (`LegalQueryClassifier`)
-2. **Query Rewriting** — LLM generates 3 legal-search-friendly variants with § references (`LegalQueryRewriter`); Gemini is the development default
-3. **Multi-Query RRF Search** — runs `search()` for each variant independently, merges via Reciprocal Rank Fusion (k=60) (`search_multi_query()`)
-4. **Legal Quality Layer** — deterministic issue profiles add mandatory sources, remove known false positives, and expose `retrieval_plan` + `source_audit` metadata before LLM answer generation (`src/retrieval/legal_quality.py`)
-
-Every stage degrades gracefully: if the LLM is unavailable, rewriting falls back to the original query; if multi-query fails, it falls back to single-query search.
-
-The quality layer is intentionally code-driven, not prompt-only. Example: ordinary employee termination requires `BGB § 623`, `BGB § 622`, `KSchG §§ 1, 4, 23`, and `BetrVG § 102`, while unrelated sources such as `BGB § 580a` are filtered from the answer context.
-
-## CLI Reference
-
-```bash
-python main.py --run-all          # All scrapers + ingestion
-python main.py --run-gesetze      # German federal laws only
-python main.py --run-eurlex       # EU law only (scaffolded)
-python main.py --run-urteile      # Court rulings only (BGH + BVerfG, ~230 rulings)
-python main.py --schedule         # Start weekly scheduler
-python main.py --stats            # Show storage size + doc/graph/Qdrant counts
-python main.py --search QUERY     # CLI search (weighted fusion + reranker)
-python main.py --search-related "BGB||§ 242"  # KG references
-
-# Retrieval quality evaluation (17 cases, single vs multi-query comparison)
-python -m pytest tests/test_retrieval_quality.py -v -s
-
-# Deterministic source-quality regression tests
+python -m pytest -q
 python -m pytest tests/test_legal_quality.py -q
+python -m pytest tests/test_retrieval_quality.py -v -s
 ```
 
-## Configuration (.env)
+Current fast suite:
 
-```bash
-GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-2.5-flash-lite
-LLM_PROVIDER=gemini               # gemini, deepseek, or anthropic
-DEEPSEEK_API_KEY=sk-...           # optional
-ANTHROPIC_API_KEY=sk-ant-...      # optional
-LEGAL_RAG_STORAGE=legal_rag_storage
-EMBEDDING_MODEL_NAME=BAAI/bge-m3
-EMBEDDING_DIM=1024
-RERANKER_MODEL_NAME=BAAI/bge-reranker-v2-m3
-BATCH_SIZE=32
-LOG_LEVEL=INFO
-REWRITER_TIMEOUT=5.0              # LLM timeout for query rewriting (seconds)
+```text
+52 passed, 3 skipped
 ```
+
+Quality checks include:
+
+- KG expansion regressions
+- legal source filtering
+- mandatory-source injection
+- UI routing guards against raw-search fallback
+- retrieval quality evaluation across legal domains
+
+---
 
 ## Known Limitations
 
-- **GPU recommended**: bge-m3 (2.2GB) + reranker (1.1GB) run on CPU but ~7s/batch. Modal T4 GPU reduces cold start + inference time significantly.
-- **Court rulings**: 7 courts (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG) from rechtsprechung-im-internet.de (RSS feed + XML ZIP). Current index has 398 unique rulings, chunked into 782 searchable segments. BGH: 201 unique decisions / 511 chunks. Scraped locally, uploaded to Volume.
-- **No EU law**: EUR-Lex SPARQL scraper is scaffolded but not yet integrated.
-- **Scraping**: Must run from residential IP (gesetze blocks datacenters). Automated via local launchd (`scripts/weekly_scrape.sh`), uploads to Modal Volume.
-- **No law versioning**: Indexes only the current version. No historical law versions or transitional provisions.
-- **Single-writer Qdrant**: Local mode doesn't support concurrent writes. Harmless `sys.meta_path is None` error on process exit.
-- **Partial scrapers merge**: `--run-urteile` or `--run-gesetze` alone no longer overwrite `documents.json`. Pipeline merges with existing docs (Gesetze dedup by `ABK||§`, Urteile by `doc_id`).
+- Index currently covers selected German federal law and selected court decisions, not every possible legal source.
+- EUR-Lex integration is scaffolded but not yet production-integrated.
+- No historical law versioning yet.
+- Scraping must run from a residential/local network because some sources block datacenter IPs.
+- Legal quality profiles are being expanded iteratively by high-value legal issue type.
 
-## Project Structure
+---
 
-```
-legal-rag-ingestion/
-├── src/
-│   ├── scrapers/{base,gesetze,eurlex,urteile}_scraper.py
-│   ├── processors/{cleaner,metadata_extractor,chunker}.py
-│   ├── ingestion/rag_pipeline.py     ← core: bge-m3 embed, weighted fusion, rerank, search, multi-query RRF
-│   ├── retrieval/
-│   │   ├── query_rewriter.py         ← LLM-based query rewriting (3 legal variants)
-│   │   ├── query_classifier.py       ← keyword-based Rechtsgebiet detection
-│   │   └── enhanced_search.py        ← classify → rewrite → multi-query orchestrator
-│   ├── scheduler/cron.py
-│   └── config.py
-├── modal_deploy.py                   ← Modal FastAPI app + LEX persona + enhanced search endpoint
-├── rebuild_clean.py                  ← filter + rebuild index from documents.json
-├── main.py                           ← CLI entry point
-├── tests/
-│   └── test_retrieval_quality.py     ← 17-case retrieval eval (single vs multi-query)
-├── .env.example
-└── requirements.txt
-```
+## License
+
+**Proprietary / Portfolio Showcase**  
+All rights reserved by Klein Digital Solutions.
+
+<div align="center">
+  <sub>Built as a German legal AI research and law-firm automation showcase.</sub>
+</div>
