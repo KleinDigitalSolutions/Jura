@@ -42,6 +42,7 @@ class LegalIssueProfile:
     required_norms: tuple[NormRef, ...] = ()
     recommended_norms: tuple[NormRef, ...] = ()
     excluded_norms: tuple[NormRef, ...] = ()
+    allowed_laws: tuple[str, ...] = ()
     answer_focus: tuple[str, ...] = ()
 
     def matches(self, query: str, rechtsgebiet: Optional[str] = None) -> bool:
@@ -67,6 +68,7 @@ class LegalRetrievalPlan:
     required_norms: list[NormRef] = field(default_factory=list)
     recommended_norms: list[NormRef] = field(default_factory=list)
     excluded_norms: list[NormRef] = field(default_factory=list)
+    allowed_laws: list[str] = field(default_factory=list)
     answer_focus: list[str] = field(default_factory=list)
 
     @property
@@ -123,6 +125,7 @@ ISSUE_PROFILES: tuple[LegalIssueProfile, ...] = (
             NormRef("BetrVG", "§ 103", "Sonderfall außerordentliche Kündigung von Betriebsratsmitgliedern"),
             NormRef("SGB IX", "§ 175", "Erweiterter Beendigungsschutz, nicht die primäre Zustimmungsvorschrift bei ordentlicher Kündigung"),
         ),
+        allowed_laws=("BGB", "KSchG", "BetrVG", "SGB IX", "TzBfG", "MuSchG", "BEEG"),
         answer_focus=(
             "Schriftform und Zugang prüfen",
             "gesetzliche, vertragliche und tarifliche Kündigungsfrist trennen",
@@ -188,6 +191,7 @@ def build_retrieval_plan(query: str, rechtsgebiet: Optional[str] = None) -> Lega
     seen_required: set[tuple[str, str]] = set()
     seen_recommended: set[tuple[str, str]] = set()
     seen_excluded: set[tuple[str, str]] = set()
+    seen_allowed_laws: set[str] = set()
 
     for profile in ISSUE_PROFILES:
         if not profile.matches(query, rechtsgebiet):
@@ -208,6 +212,11 @@ def build_retrieval_plan(query: str, rechtsgebiet: Optional[str] = None) -> Lega
             if key not in seen_excluded:
                 plan.excluded_norms.append(norm)
                 seen_excluded.add(key)
+        for law in profile.allowed_laws:
+            normalized = normalize_law(law)
+            if normalized not in seen_allowed_laws:
+                plan.allowed_laws.append(normalized)
+                seen_allowed_laws.add(normalized)
         plan.answer_focus.extend(profile.answer_focus)
 
     for focus in DOMAIN_ANSWER_FOCUS.get(rechtsgebiet or "", ()):
@@ -284,6 +293,18 @@ def apply_legal_quality(
             continue
         if (
             plan.has_profile
+            and plan.allowed_laws
+            and key[0]
+            and key[0] not in plan.allowed_laws
+            and key not in issue_source_keys
+        ):
+            rejected.append({
+                "source": f"{key[0]} {key[1]}",
+                "reason": "Gesetz gehört nicht zur zugelassenen Quellenfamilie des erkannten Prüfprofils",
+            })
+            continue
+        if (
+            plan.has_profile
             and plan.rechtsgebiet
             and source.get("rechtsgebiet")
             and source.get("rechtsgebiet") != plan.rechtsgebiet
@@ -349,6 +370,7 @@ def plan_to_dict(plan: LegalRetrievalPlan) -> dict[str, Any]:
         "required_norms": [n.label for n in plan.required_norms],
         "recommended_norms": [n.label for n in plan.recommended_norms],
         "excluded_norms": [n.label for n in plan.excluded_norms],
+        "allowed_laws": plan.allowed_laws,
         "answer_focus": plan.answer_focus,
     }
 

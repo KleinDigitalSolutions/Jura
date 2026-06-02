@@ -62,6 +62,7 @@ def test_apply_legal_quality_injects_required_sources_and_filters_false_positive
     initial_results = [
         _law_doc("BetrVG", "§ 102", "Mitbestimmung bei Kündigungen"),
         _law_doc("BGB", "§ 580a", "Kündigungsfristen"),
+        {**_law_doc("InsO", "§ 126", "Beschlußverfahren zum Kündigungsschutz"), "rechtsgebiet": "Arbeitsrecht"},
     ]
 
     qualified, plan, audit = apply_legal_quality(
@@ -74,6 +75,7 @@ def test_apply_legal_quality_injects_required_sources_and_filters_false_positive
 
     keys = {source_key(source) for source in qualified}
     assert ("BGB", "§ 580a") not in keys
+    assert ("INSO", "§ 126") not in keys
     assert {
         ("BGB", "§ 623"),
         ("BGB", "§ 622"),
@@ -85,6 +87,7 @@ def test_apply_legal_quality_injects_required_sources_and_filters_false_positive
     }.issubset(keys)
     assert plan.has_profile
     assert "BGB § 580a" in [r["source"] for r in audit.rejected]
+    assert "INSO § 126" in [r["source"] for r in audit.rejected]
     assert "BGB § 623" in audit.injected
     assert "SGB IX § 168" in audit.injected
     assert audit.missing_required == []
@@ -106,6 +109,7 @@ def test_enhanced_search_applies_legal_quality_layer():
     searcher.search_multi_query.return_value = [
         _law_doc("BetrVG", "§ 102", "Mitbestimmung bei Kündigungen"),
         _law_doc("BGB", "§ 580a", "Kündigungsfristen"),
+        {**_law_doc("InsO", "§ 126", "Beschlußverfahren zum Kündigungsschutz"), "rechtsgebiet": "Arbeitsrecht"},
         {**_law_doc("BetrVG", "§ 99", "Mitbestimmung bei personellen Einzelmaßnahmen"), "context_type": "citation_kg"},
     ]
     searcher.get_related.return_value = []
@@ -122,6 +126,7 @@ def test_enhanced_search_applies_legal_quality_layer():
     keys = {source_key(source) for source in result["results"]}
     assert ("BGB", "§ 580a") not in keys
     assert ("BETRVG", "§ 99") not in keys
+    assert ("INSO", "§ 126") not in keys
     assert ("BGB", "§ 623") in keys
     assert ("KSCHG", "§ 1") in keys
     assert ("SGB IX", "§ 168") in keys
