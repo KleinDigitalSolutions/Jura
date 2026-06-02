@@ -246,7 +246,13 @@ def _extract_query_laws(query: str) -> set[str]:
     return laws
 
 
-def _build_ask_context(search_results: list, query: str, top_k: int = 5):
+def _build_ask_context(
+    search_results: list,
+    query: str,
+    top_k: int = 5,
+    retrieval_plan: Optional[dict] = None,
+    source_audit: Optional[dict] = None,
+):
     """Build LLM prompt and citations from search results."""
     context_parts: list[str] = []
     citations: list[dict] = []
@@ -310,10 +316,26 @@ def _build_ask_context(search_results: list, query: str, top_k: int = 5):
             "stand": stand,
         })
     context = "\n\n---\n\n".join(context_parts)
+    quality_requirements = ""
+    try:
+        from src.retrieval.legal_quality import build_answer_requirements
+
+        quality_requirements = build_answer_requirements(retrieval_plan, source_audit)
+    except Exception:
+        quality_requirements = ""
+
+    quality_block = ""
+    if quality_requirements:
+        quality_block = f"""
+
+{quality_requirements}
+"""
+
     user_prompt = f"""FRAGE: {query}
 
 GESETZESTEXTE (Primärtreffer & struktureller Kontext):
 {context}
+{quality_block}
 
 Analysiere die Frage präzise auf Basis der bereitgestellten Gesetzestexte. 
 Beachte dabei besonders die Zusammenhänge zwischen den Paragraphen.
@@ -551,7 +573,13 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                 return
 
             context_k = min(len(search_results), top_k + 3)
-            user_prompt, citations = _build_ask_context(search_results, q, context_k)
+            user_prompt, citations = _build_ask_context(
+                search_results,
+                q,
+                context_k,
+                retrieval_plan=enhanced_result.get("retrieval_plan"),
+                source_audit=enhanced_result.get("source_audit"),
+            )
 
             yield "event: search\ndata: " + json.dumps({
                 "citations": citations,
@@ -559,6 +587,8 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                 "rewritten_queries": enhanced_result.get("rewritten_queries", [q]),
                 "rechtsgebiet": enhanced_result.get("rechtsgebiet"),
                 "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
+                "retrieval_plan": enhanced_result.get("retrieval_plan"),
+                "source_audit": enhanced_result.get("source_audit"),
             }) + "\n\n"
 
             last_error = ""
@@ -640,6 +670,8 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                 "rewritten_queries": enhanced_result.get("rewritten_queries", [q]),
                 "rechtsgebiet": enhanced_result.get("rechtsgebiet"),
                 "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
+                "retrieval_plan": enhanced_result.get("retrieval_plan"),
+                "source_audit": enhanced_result.get("source_audit"),
             }) + "\n\n"
 
         except Exception as e:
@@ -675,7 +707,13 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
         }
 
     context_k = min(len(search_results), top_k + 3)
-    user_prompt, citations = _build_ask_context(search_results, q, context_k)
+    user_prompt, citations = _build_ask_context(
+        search_results,
+        q,
+        context_k,
+        retrieval_plan=enhanced_result.get("retrieval_plan"),
+        source_audit=enhanced_result.get("source_audit"),
+    )
 
     last_error = ""
     answer_text = ""
@@ -701,6 +739,8 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
         "rewritten_queries": enhanced_result.get("rewritten_queries", [q]),
         "rechtsgebiet": enhanced_result.get("rechtsgebiet"),
         "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
+        "retrieval_plan": enhanced_result.get("retrieval_plan"),
+        "source_audit": enhanced_result.get("source_audit"),
         "model": model_used,
         "citation_warnings": citation_warnings,
     }

@@ -8,6 +8,7 @@ import re
 from typing import Optional
 
 from src.ingestion.rag_pipeline import LegalSearcher
+from src.retrieval.legal_quality import apply_legal_quality, plan_to_dict
 from src.retrieval.query_classifier import LegalQueryClassifier
 from src.retrieval.query_rewriter import LegalQueryRewriter
 
@@ -63,6 +64,8 @@ class EnhancedLegalSearch:
                 - rechtsgebiet: detected legal area or None
                 - retrieval_method: "enhanced" | "fallback" | "full_fallback"
                 - original_query: the input query
+                - retrieval_plan: deterministic legal quality plan
+                - source_audit: accepted/rejected/injected source audit
         """
         result = {
             "results": [],
@@ -70,6 +73,8 @@ class EnhancedLegalSearch:
             "rechtsgebiet": None,
             "retrieval_method": "full_fallback",
             "original_query": query,
+            "retrieval_plan": None,
+            "source_audit": None,
         }
 
         # Step 1: Classify Rechtsgebiet
@@ -173,5 +178,23 @@ class EnhancedLegalSearch:
                 result["kg_expanded_count"] = max(0, len(kg_expanded) - original_count)
             except Exception:
                 logger.exception("Knowledge Graph expansion failed")
+
+        # Step 5: deterministic legal quality layer
+        # Profiles add mandatory norms for known issue classes and remove
+        # known false-positive sources before answer generation.
+        if result["results"]:
+            try:
+                qualified, plan, audit = apply_legal_quality(
+                    query=query,
+                    results=result["results"],
+                    searcher=self.searcher,
+                    rechtsgebiet=rechtsgebiet,
+                    top_k=top_k,
+                )
+                result["results"] = qualified
+                result["retrieval_plan"] = plan_to_dict(plan)
+                result["source_audit"] = audit.as_dict()
+            except Exception:
+                logger.exception("Legal quality layer failed")
 
         return result

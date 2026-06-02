@@ -172,8 +172,11 @@ The `/api/legal/ask/enhanced` endpoint runs an additional pipeline before the st
 1. **Query Classification** — fast keyword-based Rechtsgebiet detection (`LegalQueryClassifier`)
 2. **Query Rewriting** — LLM generates 3 legal-search-friendly variants with § references (`LegalQueryRewriter`); Gemini is the development default
 3. **Multi-Query RRF Search** — runs `search()` for each variant independently, merges via Reciprocal Rank Fusion (k=60) (`search_multi_query()`)
+4. **Legal Quality Layer** — deterministic issue profiles add mandatory sources, remove known false positives, and expose `retrieval_plan` + `source_audit` metadata before LLM answer generation (`src/retrieval/legal_quality.py`)
 
 Every stage degrades gracefully: if the LLM is unavailable, rewriting falls back to the original query; if multi-query fails, it falls back to single-query search.
+
+The quality layer is intentionally code-driven, not prompt-only. Example: ordinary employee termination requires `BGB § 623`, `BGB § 622`, `KSchG §§ 1, 4, 23`, and `BetrVG § 102`, while unrelated sources such as `BGB § 580a` are filtered from the answer context.
 
 ## CLI Reference
 
@@ -189,6 +192,9 @@ python main.py --search-related "BGB||§ 242"  # KG references
 
 # Retrieval quality evaluation (17 cases, single vs multi-query comparison)
 python -m pytest tests/test_retrieval_quality.py -v -s
+
+# Deterministic source-quality regression tests
+python -m pytest tests/test_legal_quality.py -q
 ```
 
 ## Configuration (.env)
