@@ -1291,7 +1291,7 @@ function addAssistantMessage(text, sources, model, streaming = false) {
     </div>
     <div class="msg-meta">
       ${modelBadge}
-      <span>LEX · hybride Suche</span>
+      <span>LEX · geprüfte Analyse</span>
     </div>`;
   inner.appendChild(div);
   scrollToBottom();
@@ -1355,7 +1355,7 @@ function updateStreamingMessage(text) {
     div.className = 'msg assistant';
     div.id = 'streaming-msg';
     div.innerHTML = `<div class="bubble"><div class="streaming-cursor" id="streamBody"></div></div>
-      <div class="msg-meta"><span class="model-badge" id="streamModelBadge">Analyse läuft...</span><span>LEX · hybride Suche</span></div>`;
+      <div class="msg-meta"><span class="model-badge" id="streamModelBadge">Analyse läuft...</span><span>LEX · geprüfte Analyse</span></div>`;
     inner.appendChild(div);
     msg = div;
   }
@@ -1481,9 +1481,9 @@ async function handleSubmit() {
     es.addEventListener('error', (e) => {
       hideTerminal();
       if (!answerText) {
-        // No answer yet — fallback to regular search
+        // No answer yet — fallback to the same enhanced answer pipeline.
         es.close();
-        fallbackSearch(q);
+        fallbackAsk(queryWithCase);
         return;
       }
 
@@ -1505,19 +1505,18 @@ async function handleSubmit() {
           finalizeStreamingMessage(answerText, sources, model);
           addMessageToCurrentChat('assistant', answerText, sources, model);
         } else {
-          // Fallback to search
-          fallbackSearch(q);
+          fallbackAsk(queryWithCase);
         }
       }
-    }, 90000);
+    }, 180000);
 
   } catch (e) {
     hideTerminal();
-    fallbackSearch(q);
+    fallbackAsk(queryWithCase);
   }
 }
 
-async function fallbackSearch(q) {
+async function fallbackAsk(q) {
   hideTerminal();
   const existing = document.getElementById('streaming-msg');
   if (existing) existing.remove();
@@ -1526,37 +1525,27 @@ async function fallbackSearch(q) {
   const inner = document.getElementById('messagesInner');
 
   try {
-    const resp = await fetch('/api/legal/search?q=' + encodeURIComponent(q) + '&top_k=7');
+    const resp = await fetch('/api/legal/ask/enhanced?q=' + encodeURIComponent(q) + '&top_k=8');
     const data = await resp.json();
 
-    if (!data.results || data.results.length === 0) {
-      inner.innerHTML += '<div class="error-msg">Keine relevanten Gesetzesstellen gefunden. Bitte versuchen Sie eine andere Formulierung.</div>';
-      addMessageToCurrentChat('assistant', 'Keine relevanten Gesetzesstellen gefunden.', [], '');
+    if (!data.answer) {
+      const msg = 'Die geprüfte Analyse konnte nicht erstellt werden. Bitte versuchen Sie es erneut.';
+      inner.innerHTML += `<div class="error-msg">${escHtml(msg)}</div>`;
+      addMessageToCurrentChat('assistant', msg, [], '');
       sendBtn.disabled = false;
       state.isStreaming = false;
       return;
     }
 
-    const results = data.results;
-    window._lastSources = results;
+    const sources = data.citations || [];
+    const answer = data.answer;
+    const model = data.model || 'geprüfte Analyse';
+    window._lastSources = sources;
 
-    // Build a user-friendly response
-    let answer = `Ich habe **${results.length}** relevante Fundstellen zu Ihrer Frage gefunden:\n\n`;
-    results.forEach((r, i) => {
-      const label = r.typ === 'urteil'
-        ? `${r.gericht} · ${r.aktenzeichen}`
-        : `${r.abkürzung} ${r.paragraph} — ${r.paragraph_titel || ''}`;
-      answer += `[${i + 1}] **${label}**\n`;
-      const fullText = (r.inhalt || r.volltext || '');
-      const snippet = fullText.length > 500 ? fullText.substring(0, 500) + '...' : fullText;
-      if (snippet) answer += `> ${snippet}\n\n`;
-    });
-    answer += '\n*Möchten Sie eine detaillierte Analyse? Klicken Sie auf eine Quelle für den Volltext oder versuchen Sie es erneut.*';
-
-    addAssistantMessage(answer, results, 'Hybrid-Index');
-    addMessageToCurrentChat('assistant', answer, results, 'Hybrid-Index');
+    addAssistantMessage(answer, sources, model);
+    addMessageToCurrentChat('assistant', answer, sources, model);
   } catch (e) {
-    inner.innerHTML += '<div class="error-msg">Fehler bei der Suche. Bitte versuchen Sie es später erneut.</div>';
+    inner.innerHTML += '<div class="error-msg">Fehler bei der geprüften Analyse. Bitte versuchen Sie es später erneut.</div>';
   }
   sendBtn.disabled = false;
   state.isStreaming = false;
