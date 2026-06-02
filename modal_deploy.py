@@ -9,6 +9,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 import modal
 from fastapi import FastAPI
@@ -459,7 +460,7 @@ async def legal_ask(q: str = "", top_k: int = 5):
 
 @web_app.get("/api/legal/ask/stream")
 async def legal_ask_stream(q: str = "", top_k: int = 5):
-    """Search + streaming LLM answer via Server-Sent Events."""
+    """Enhanced search + streaming LLM answer via Server-Sent Events."""
     q, err = _validate_query(q, top_k)
     if err:
         return err
@@ -468,16 +469,24 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
 
     async def event_stream():
         try:
-            search_results = rag.search.remote(q, top_k=top_k)
+            enhanced_result = rag.enhanced_search.remote(q, top_k=top_k)
+            search_results = enhanced_result.get("results", [])
 
             if not search_results:
                 yield "event: error\ndata: " + json.dumps({"message": "Keine relevanten Gesetzesstellen gefunden."}) + "\n\n"
                 yield "event: done\ndata: {}\n\n"
                 return
 
-            user_prompt, citations = _build_ask_context(search_results, q, top_k)
+            context_k = min(len(search_results), top_k + 3)
+            user_prompt, citations = _build_ask_context(search_results, q, context_k)
 
-            yield "event: search\ndata: " + json.dumps({"citations": citations, "count": len(citations)}) + "\n\n"
+            yield "event: search\ndata: " + json.dumps({
+                "citations": citations,
+                "count": len(citations),
+                "rewritten_queries": enhanced_result.get("rewritten_queries", [q]),
+                "rechtsgebiet": enhanced_result.get("rechtsgebiet"),
+                "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
+            }) + "\n\n"
 
             # Failover mechanism for streaming
             provider = os.getenv("LLM_PROVIDER", "deepseek")
@@ -489,6 +498,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
 
             last_error = ""
             success = False
+            answer_parts: list[str] = []
             for p in providers:
                 try:
                     if p == "anthropic":
@@ -504,6 +514,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                             messages=[{"role": "user", "content": user_prompt}],
                         ) as stream:
                             for text in stream.text_stream:
+                                answer_parts.append(text)
                                 yield "event: token\ndata: " + json.dumps(text) + "\n\n"
                         model_used = "claude-3-5-sonnet"
                         success = True
@@ -528,6 +539,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                         for chunk in response:
                             delta = chunk.choices[0].delta.content
                             if delta:
+                                answer_parts.append(delta)
                                 yield "event: token\ndata: " + json.dumps(delta) + "\n\n"
                         model_used = "deepseek-chat"
                         success = True
@@ -541,7 +553,23 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                 yield "event: done\ndata: {}\n\n"
                 return
 
-            yield "event: done\ndata: " + json.dumps({"model": model_used}) + "\n\n"
+            raw_answer = "".join(answer_parts)
+            verified_answer, citation_warnings = _verify_citations(raw_answer, citations)
+            if verified_answer != raw_answer:
+                extra = (
+                    verified_answer[len(raw_answer):]
+                    if verified_answer.startswith(raw_answer)
+                    else "\n\n" + verified_answer
+                )
+                yield "event: token\ndata: " + json.dumps(extra) + "\n\n"
+
+            yield "event: done\ndata: " + json.dumps({
+                "model": model_used,
+                "citation_warnings": citation_warnings,
+                "rewritten_queries": enhanced_result.get("rewritten_queries", [q]),
+                "rechtsgebiet": enhanced_result.get("rechtsgebiet"),
+                "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
+            }) + "\n\n"
 
         except Exception as e:
             yield "event: error\ndata: " + json.dumps({"message": str(e)}) + "\n\n"
@@ -575,7 +603,8 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
             "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
         }
 
-    user_prompt, citations = _build_ask_context(search_results, q, top_k)
+    context_k = min(len(search_results), top_k + 3)
+    user_prompt, citations = _build_ask_context(search_results, q, context_k)
 
     # Provider failover (gleiches Pattern wie generate_answer)
     provider = os.getenv("LLM_PROVIDER", "deepseek")

@@ -44,23 +44,24 @@ class TestGesetzeScraper:
             assert isinstance(laws, list)
 
     @pytest.mark.asyncio
-    async def test_scrape_returns_list(self):
+    async def test_scrape_returns_list(self, monkeypatch):
+        from src.scrapers import gesetze_scraper
         from src.scrapers.gesetze_scraper import GesetzeScraper
+
+        monkeypatch.setattr(gesetze_scraper, "PRIORITY_LAWS", ["BGB"])
         scraper = GesetzeScraper()
         with patch.object(scraper, '_discover_laws', AsyncMock(return_value=[
             {"url_slug": "bgb", "abkuerzung": "BGB", "title": "Bürgerliches Gesetzbuch"}
         ])):
-            with patch.object(scraper, '_download_xml_zip', AsyncMock(return_value=None)):
-                with patch.object(scraper, '_scrape_law_html', AsyncMock(return_value=[{
-                    "typ": "gesetz", "abkürzung": "BGB", "titel": "Test",
-                    "paragraph": "§ 1", "inhalt": "Testinhalt",
-                    "url": "https://example.com", "stand": "2024-01-01",
-                    "quelle": "gesetze-im-internet.de"
-                }])):
-                    docs = await scraper.scrape()
-                    assert isinstance(docs, list)
-                    if len(docs) > 0:
-                        assert docs[0]["abkürzung"] == "BGB"
+            with patch.object(scraper, '_scrape_law', AsyncMock(return_value=[{
+                "typ": "gesetz", "abkürzung": "BGB", "titel": "Test",
+                "paragraph": "§ 1", "inhalt": "Testinhalt",
+                "url": "https://example.com", "stand": "2024-01-01",
+                "quelle": "gesetze-im-internet.de"
+            }])):
+                docs = await scraper.scrape()
+                assert isinstance(docs, list)
+                assert docs[0]["abkürzung"] == "BGB"
 
 
 class TestEurLexScraper:
@@ -88,19 +89,19 @@ class TestUrteileScraper:
     def test_deduce_rechtsgebiet(self):
         from src.scrapers.urteile_scraper import UrteileScraper
         scraper = UrteileScraper()
-        result = scraper._deduce_rechtsgebiet("Schadensersatz nach § 823 BGB")
+        result = scraper._deduce_rechtsgebiet("§ 823 BGB", "Schadensersatz nach § 823 BGB")
         assert result == "Zivilrecht"
 
-        result = scraper._deduce_rechtsgebiet("Diebstahl gemäß § 242 StGB")
+        result = scraper._deduce_rechtsgebiet("§ 242 StGB", "Diebstahl gemäß § 242 StGB")
         assert result == "Strafrecht"
 
-        result = scraper._deduce_rechtsgebiet("Unbekannter Rechtstext")
+        result = scraper._deduce_rechtsgebiet("", "Unbekannter Rechtstext")
         assert result == "Sonstiges"
 
     @pytest.mark.asyncio
     async def test_scrape_returns_list(self):
         from src.scrapers.urteile_scraper import UrteileScraper
         scraper = UrteileScraper()
-        with patch.object(scraper, '_fetch_court_page', AsyncMock(return_value='<html></html>')):
+        with patch.object(scraper, '_fetch_rss_feed', AsyncMock(return_value=[])):
             docs = await scraper.scrape()
             assert isinstance(docs, list)
