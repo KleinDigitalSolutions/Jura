@@ -56,6 +56,7 @@ def test_apply_legal_quality_injects_required_sources_and_filters_false_positive
         _law_doc("KSchG", "§ 4", "Anrufung des Arbeitsgerichtes"),
         _law_doc("KSchG", "§ 23", "Geltungsbereich"),
         _law_doc("BetrVG", "§ 102", "Mitbestimmung bei Kündigungen"),
+        _law_doc("SGB IX", "§ 168", "Erfordernis der Zustimmung"),
         _law_doc("BGB", "§ 580a", "Kündigungsfristen"),
     ]
     initial_results = [
@@ -80,10 +81,12 @@ def test_apply_legal_quality_injects_required_sources_and_filters_false_positive
         ("KSCHG", "§ 4"),
         ("KSCHG", "§ 23"),
         ("BETRVG", "§ 102"),
+        ("SGB IX", "§ 168"),
     }.issubset(keys)
     assert plan.has_profile
     assert "BGB § 580a" in [r["source"] for r in audit.rejected]
     assert "BGB § 623" in audit.injected
+    assert "SGB IX § 168" in audit.injected
     assert audit.missing_required == []
 
 
@@ -95,6 +98,7 @@ def test_enhanced_search_applies_legal_quality_layer():
         _law_doc("KSchG", "§ 4", "Anrufung des Arbeitsgerichtes"),
         _law_doc("KSchG", "§ 23", "Geltungsbereich"),
         _law_doc("BetrVG", "§ 102", "Mitbestimmung bei Kündigungen"),
+        _law_doc("SGB IX", "§ 168", "Erfordernis der Zustimmung"),
         _law_doc("BGB", "§ 580a", "Kündigungsfristen"),
     ]
     searcher = MagicMock()
@@ -102,6 +106,7 @@ def test_enhanced_search_applies_legal_quality_layer():
     searcher.search_multi_query.return_value = [
         _law_doc("BetrVG", "§ 102", "Mitbestimmung bei Kündigungen"),
         _law_doc("BGB", "§ 580a", "Kündigungsfristen"),
+        {**_law_doc("BetrVG", "§ 99", "Mitbestimmung bei personellen Einzelmaßnahmen"), "context_type": "citation_kg"},
     ]
     searcher.get_related.return_value = []
     rewriter = MagicMock()
@@ -116,8 +121,10 @@ def test_enhanced_search_applies_legal_quality_layer():
 
     keys = {source_key(source) for source in result["results"]}
     assert ("BGB", "§ 580a") not in keys
+    assert ("BETRVG", "§ 99") not in keys
     assert ("BGB", "§ 623") in keys
     assert ("KSCHG", "§ 1") in keys
+    assert ("SGB IX", "§ 168") in keys
     assert result["retrieval_plan"]["profiles"] == [
         "arbeitsrecht_ordentliche_kuendigung_arbeitnehmer"
     ]

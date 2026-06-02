@@ -121,6 +121,7 @@ ISSUE_PROFILES: tuple[LegalIssueProfile, ...] = (
         excluded_norms=(
             NormRef("BGB", "§ 580a", "Mietrechtliche Kündigungsfrist, nicht Arbeitsverhältnis"),
             NormRef("BetrVG", "§ 103", "Sonderfall außerordentliche Kündigung von Betriebsratsmitgliedern"),
+            NormRef("SGB IX", "§ 175", "Erweiterter Beendigungsschutz, nicht die primäre Zustimmungsvorschrift bei ordentlicher Kündigung"),
         ),
         answer_focus=(
             "Schriftform und Zugang prüfen",
@@ -261,6 +262,9 @@ def apply_legal_quality(
     notes: list[str] = []
 
     excluded = {norm_key(n): n for n in plan.excluded_norms}
+    required_keys = {norm_key(n) for n in plan.required_norms}
+    recommended_keys = {norm_key(n) for n in plan.recommended_norms}
+    issue_source_keys = required_keys | recommended_keys
     filtered: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
 
@@ -270,6 +274,24 @@ def apply_legal_quality(
             rejected.append({
                 "source": f"{key[0]} {key[1]}",
                 "reason": excluded[key].reason,
+            })
+            continue
+        if plan.has_profile and source.get("context_type") == "citation_kg" and key not in issue_source_keys:
+            rejected.append({
+                "source": f"{key[0]} {key[1]}",
+                "reason": "KG-Kontext ist für das erkannte Prüfprofil keine Pflicht- oder Sonderquelle",
+            })
+            continue
+        if (
+            plan.has_profile
+            and plan.rechtsgebiet
+            and source.get("rechtsgebiet")
+            and source.get("rechtsgebiet") != plan.rechtsgebiet
+            and key not in issue_source_keys
+        ):
+            rejected.append({
+                "source": f"{key[0]} {key[1]}",
+                "reason": f"Rechtsgebiet {source.get('rechtsgebiet')} passt nicht zum Prüfprofil {plan.rechtsgebiet}",
             })
             continue
         if key in seen:
@@ -284,6 +306,17 @@ def apply_legal_quality(
         exact = _find_exact_norm(searcher, norm)
         if exact:
             filtered.insert(0, exact)
+            seen.add(key)
+            injected.append(norm.label)
+
+    for norm in plan.recommended_norms:
+        key = norm_key(norm)
+        if key in seen:
+            continue
+        exact = _find_exact_norm(searcher, norm)
+        if exact:
+            exact["context_type"] = "recommended_norm"
+            filtered.append(exact)
             seen.add(key)
             injected.append(norm.label)
 
@@ -328,6 +361,7 @@ def build_answer_requirements(plan_data: Optional[dict[str, Any]], audit_data: O
     profiles = plan_data.get("profiles") or []
     if profiles:
         lines.append("QUALITÄTSANFORDERUNGEN AUS DER RECHTLICHEN PRÜFPLANUNG:")
+        lines.append("- Diese Anforderungen sind verbindlich. Behandle sie in der Antwort sichtbar, nicht nur in der Quellenliste.")
         required = plan_data.get("required_norms") or []
         if required:
             lines.append("- Pflichtquellen, soweit im Kontext vorhanden, ausdrücklich prüfen: " + ", ".join(required))
