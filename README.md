@@ -1,6 +1,6 @@
 # Legal RAG — German Law Search & Q&A
 
-Hybrid search engine for German federal law: 16,961 documents from 72 laws + court ruling chunks from 398 Urteilen (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG) indexed with bge-m3 (dense + learned sparse) + cross-encoder reranker. Deployed on Modal as a FastAPI web app with LEX/JURA legal assistant persona (DeepSeek default, Claude switchable).
+Hybrid search engine for German federal law: 17,024 indexed documents from 74 laws + court ruling chunks from 398 Urteilen (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG) indexed with bge-m3 (dense + learned sparse) + cross-encoder reranker. Deployed on Modal as a FastAPI web app with LEX/JURA legal assistant persona (Gemini Flash-Lite default for development, DeepSeek/Claude optional).
 
 **Live**: [legal-rag-fastapi-app.modal.run](https://aliundmaggy--legal-rag-fastapi-app.modal.run)
 
@@ -30,7 +30,7 @@ gesetze-im-internet.de (XML ZIPs)    rechtsprechung-im-internet.de (RSS + XML)
                          └──► NetworkX DiGraph ──► legal_graph.graphml (§ references)
 ```
 
-**No LLM during indexing** — regex §-parser for knowledge graph edges. Full rebuild: ~65 min CPU (12,766 docs), ~15 min GPU.
+**No LLM during indexing** — regex §-parser for knowledge graph edges. Current Modal index: 16,242 law paragraphs + 782 ruling chunks.
 
 | Component | Technology |
 |-----------|-----------|
@@ -39,7 +39,7 @@ gesetze-im-internet.de (XML ZIPs)    rechtsprechung-im-internet.de (RSS + XML)
 | Fusion | Weighted (0.7 dense / 0.3 sparse, min-max normalized) |
 | Reranker | `BAAI/bge-reranker-v2-m3` cross-encoder via FlagEmbedding |
 | Knowledge Graph | NetworkX DiGraph, regex §-Verweis parser (965K edges) |
-| LLM (Q&A) | DeepSeek Chat (default) / Claude Sonnet 4.6 (switchable via `LLM_PROVIDER`) |
+| LLM (Q&A) | Gemini `gemini-2.5-flash-lite` default for development; DeepSeek/Claude optional via `LLM_PROVIDER` |
 | Deployment | Modal (FastAPI ASGI, Volume, GPU T4, Cron) |
 
 ## Quick Start
@@ -75,7 +75,7 @@ python main.py --stats
 - **Gesetze**: [gesetze-im-internet.de](https://www.gesetze-im-internet.de)
 - **Method**: Parse Teilliste index → download XML ZIP per law → extract paragraphs from `metadaten/enbez` + text from `textdaten/text/P`
 - **Rate limiting**: 1 req/s, retry with exponential backoff (max 3)
-- **72 laws**: GG, BGB, StGB, HGB, ZPO, GmbHG, AktG, VwVfG, InsO, SGB I–XII, and more
+- **74 laws**: GG, BGB, StGB, HGB, ZPO, GmbHG, AktG, VwVfG, InsO, SGB I–XII, and more
 - **Urteile**: [rechtsprechung-im-internet.de](https://www.rechtsprechung-im-internet.de)
 - **Method**: RSS feed → XML ZIP per ruling → extract Leitsatz, Tenor, Tatbestand, Entscheidungsgründe
 - **Courts**: BGH (201), BVerfG (29), BVerwG (54), BFH (56), BAG (29), BSG (24), BPatG (5)
@@ -101,13 +101,13 @@ Applied by `rebuild_clean.py`:
 | `paragraph` contains "Inhaltsübersicht" | Table of contents entries |
 | `abkürzung` starts with "./" | Unofficial TOC |
 
-**17,500 raw → 16,961 clean documents.**
+**Current Modal index: 17,024 documents** — 16,242 law paragraphs + 782 ruling chunks.
 
 ## Storage
 
 ```
 legal_rag_storage/
-├── documents.json          ← 16,961 docs, all structured fields
+├── documents.json          ← 17,024 docs, all structured fields
 ├── legal_graph.graphml     ← NetworkX DiGraph (965K edges)
 └── qdrant/                 ← Qdrant local mode (~280 MB, 1024-dim + sparse)
 ```
@@ -143,19 +143,23 @@ modal volume put legal-rag-data qdrant/collection/legal_docs/storage.sqlite lega
 - **Image**: Debian slim Python 3.12 + pre-downloaded bge-m3 + reranker models
 - **GPU**: T4 (recommended for bge-m3 + reranker inference)
 - **Volume**: `legal-rag-data` at `/legal_rag_storage` (persistent)
-- **Secrets**: `my-deepseek-secret` (DeepSeek API key), `my-anthropic-secret` (Anthropic API key, optional)
+- **Secrets**: `my-gemini-secret` (Gemini API key), `my-deepseek-secret` (optional), `my-anthropic-secret` (optional)
 - **Concurrency**: max 10 inputs per container
 - **Cron**: Local macOS launchd (Saturday 04:00 CET) — scrapes residential, uploads to Volume. `scripts/weekly_scrape.sh`
 
 ### LLM Provider Switch
 
-Set `LLM_PROVIDER` env var to switch between DeepSeek (default) and Claude:
+Set `LLM_PROVIDER` env var to switch providers. Development default is Gemini Flash-Lite:
 
 ```bash
-# DeepSeek (default, no config needed)
+# Gemini free-tier development default
+LLM_PROVIDER=gemini
+GEMINI_MODEL=gemini-2.5-flash-lite
+
+# DeepSeek optional fallback
 LLM_PROVIDER=deepseek
 
-# Claude Sonnet 4.6 (requires my-anthropic-secret)
+# Claude optional fallback (requires Anthropic credit)
 LLM_PROVIDER=anthropic
 ```
 
@@ -166,7 +170,7 @@ On Modal, set via Secret or environment variable in `modal_deploy.py`.
 The `/api/legal/ask/enhanced` endpoint runs an additional pipeline before the standard search:
 
 1. **Query Classification** — fast keyword-based Rechtsgebiet detection (`LegalQueryClassifier`)
-2. **Query Rewriting** — LLM (DeepSeek/Claude) generates 3 legal-search-friendly variants with § references (`LegalQueryRewriter`)
+2. **Query Rewriting** — LLM generates 3 legal-search-friendly variants with § references (`LegalQueryRewriter`); Gemini is the development default
 3. **Multi-Query RRF Search** — runs `search()` for each variant independently, merges via Reciprocal Rank Fusion (k=60) (`search_multi_query()`)
 
 Every stage degrades gracefully: if the LLM is unavailable, rewriting falls back to the original query; if multi-query fails, it falls back to single-query search.
@@ -190,9 +194,11 @@ python -m pytest tests/test_retrieval_quality.py -v -s
 ## Configuration (.env)
 
 ```bash
-DEEPSEEK_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...      # optional, for Claude switch
-LLM_PROVIDER=deepseek             # deepseek or anthropic
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.5-flash-lite
+LLM_PROVIDER=gemini               # gemini, deepseek, or anthropic
+DEEPSEEK_API_KEY=sk-...           # optional
+ANTHROPIC_API_KEY=sk-ant-...      # optional
 LEGAL_RAG_STORAGE=legal_rag_storage
 EMBEDDING_MODEL_NAME=BAAI/bge-m3
 EMBEDDING_DIM=1024
@@ -205,7 +211,7 @@ REWRITER_TIMEOUT=5.0              # LLM timeout for query rewriting (seconds)
 ## Known Limitations
 
 - **GPU recommended**: bge-m3 (2.2GB) + reranker (1.1GB) run on CPU but ~7s/batch. Modal T4 GPU reduces cold start + inference time significantly.
-- **Court rulings**: 7 courts (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG) from rechtsprechung-im-internet.de (RSS feed + XML ZIP). BGH Zivilsenat prioritized. 398 rulings, chunked into 782 searchable segments. Scraped locally, uploaded to Volume.
+- **Court rulings**: 7 courts (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG) from rechtsprechung-im-internet.de (RSS feed + XML ZIP). Current index has 398 unique rulings, chunked into 782 searchable segments. BGH: 201 unique decisions / 511 chunks. Scraped locally, uploaded to Volume.
 - **No EU law**: EUR-Lex SPARQL scraper is scaffolded but not yet integrated.
 - **Scraping**: Must run from residential IP (gesetze blocks datacenters). Automated via local launchd (`scripts/weekly_scrape.sh`), uploads to Modal Volume.
 - **No law versioning**: Indexes only the current version. No historical law versions or transitional provisions.
