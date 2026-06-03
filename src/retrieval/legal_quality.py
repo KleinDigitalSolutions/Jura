@@ -386,12 +386,15 @@ def build_answer_requirements(plan_data: Optional[dict[str, Any]], audit_data: O
     if profiles:
         lines.append("QUALITÄTSANFORDERUNGEN AUS DER RECHTLICHEN PRÜFPLANUNG:")
         lines.append("- Diese Anforderungen sind verbindlich. Behandle sie in der Antwort sichtbar, nicht nur in der Quellenliste.")
+        lines.append("- Jeder einzelne Satz mit rechtlicher Aussage braucht eine eigene Quellen-ID am Satzende; Folge- oder Erläuterungssätze dürfen nicht ohne Quellen-ID bleiben.")
         required = plan_data.get("required_norms") or []
         if required:
             lines.append("- Pflichtquellen, soweit im Kontext vorhanden, ausdrücklich prüfen: " + ", ".join(required))
         recommended = plan_data.get("recommended_norms") or []
         if recommended:
             lines.append("- Mögliche Sonderregeln gesondert als kontextabhängig markieren: " + ", ".join(recommended))
+        if "arbeitsrecht_ordentliche_kuendigung_arbeitnehmer" in profiles:
+            lines.append("- Sonderkündigungsschutz nur nennen, wenn eine passende Quelle im Kontext zitiert wird; insbesondere Schwerbehinderung nur mit SGB IX § 168-Kontext.")
     focus = plan_data.get("answer_focus") or []
     for item in focus:
         lines.append(f"- {item}")

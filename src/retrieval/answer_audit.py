@@ -21,6 +21,7 @@ LAW_PATTERN = re.compile(
 )
 PARA_PATTERN = re.compile(r"§+\s*(\d+[a-z]?)", re.IGNORECASE)
 CITATION_PATTERN = re.compile(r"\[(\d+)\]")
+CITATION_BLOCK_PATTERN = re.compile(r"\[([0-9,\s]+)\]")
 
 MATERIAL_TERMS = (
     "anspruch",
@@ -90,29 +91,82 @@ def _normalize_para(value: str) -> str:
 def _split_claims(answer: str) -> list[str]:
     """Split answer into sentence-like claims while keeping markdown bullets."""
     normalized = re.sub(r"\r\n?", "\n", answer or "")
+    normalized = re.sub(r"(\d+)\.", r"\1__DOT__", normalized)
+    abbreviations = {
+        "z.B.": "z__DOT__B__DOT__",
+        "d.h.": "d__DOT__h__DOT__",
+        "bzw.": "bzw__DOT__",
+        "ggf.": "ggf__DOT__",
+        "ca.": "ca__DOT__",
+    }
+    for original, protected in abbreviations.items():
+        normalized = normalized.replace(original, protected)
     raw_parts = re.split(r"(?<=[.!?])\s+|\n+", normalized)
     claims: list[str] = []
+    skip_summary = False
     for part in raw_parts:
         claim = part.strip()
+        claim = claim.replace("__DOT__", ".")
+        for original, protected in abbreviations.items():
+            claim = claim.replace(protected, original)
         claim = re.sub(r"^[-*]\s+", "", claim)
         claim = re.sub(r"^#{1,6}\s*", "", claim)
         if not claim or claim in {"---"}:
+            continue
+        plain = re.sub(r"[*_`]", "", claim).strip().lower()
+        if "zusammenfassende kernaussage" in plain or plain.startswith("zusammenfassend"):
+            skip_summary = True
+            continue
+        if plain.startswith("dies ist eine allgemeine information"):
+            skip_summary = False
+        elif skip_summary:
             continue
         claims.append(claim)
     return claims
 
 
+def _extract_citation_ids(claim: str) -> list[str]:
+    """Extract citation ids from [1], [1, 3], and [1,3] style references."""
+    ids: list[str] = []
+    for block in CITATION_BLOCK_PATTERN.findall(claim or ""):
+        for raw_id in re.split(r"\s*,\s*", block.strip()):
+            if raw_id and raw_id.isdigit() and raw_id not in ids:
+                ids.append(raw_id)
+    return ids
+
+
 def _is_material_claim(claim: str) -> bool:
     text = claim.strip().lower()
+    plain = re.sub(r"[*_`]", "", text).strip()
     if len(text) < 18:
         return False
-    if re.match(r"^(?:\d+\.\s*)?(issue|rule|analysis|conclusion)\b", text):
+    if re.match(r"^(?:\d+\.\s*)?(issue|rule|analysis|conclusion)\b", plain):
+        return False
+    if re.match(r"^(?:\d+\.\s*)?(prüfung|handlungsempfehlung|zusammenfassend)\b", plain):
         return False
     if text.startswith(("sehr geehrte", "gerne erläutere", "auf basis der")):
         return False
     if text.startswith(("hinweis zur quellenprüfung", "bitte überprüfen")):
         return False
-    if CITATION_PATTERN.search(claim) or PARA_PATTERN.search(claim) or LAW_PATTERN.search(claim):
+    if text.startswith(("dies ist eine allgemeine information", "bitte stellen", "bitte reichen", "bitte bringen")):
+        return False
+    if text.startswith(("für eine abschließende beurteilung", "um die wirksamkeit", "für die wirksamkeit")):
+        return False
+    if text.startswith(("es ist ratsam", "für bestimmte arbeitnehmergruppen kann besonderer kündigungsschutz bestehen")):
+        return False
+    if text.startswith("ein anwalt"):
+        return False
+    if re.match(r"^die wirksamkeit .* richtet sich nach verschiedenen gesetzlichen", plain):
+        return False
+    if not _extract_citation_ids(claim) and re.match(r"^\*\*[^*]+:\*\*", claim.strip()):
+        return False
+    if not _extract_citation_ids(claim) and re.match(r"^\d+\.\s+\*\*[^*]+:\*\*", claim.strip()):
+        return False
+    if plain.endswith(":"):
+        return False
+    if text.endswith("?"):
+        return False
+    if _extract_citation_ids(claim) or PARA_PATTERN.search(claim) or LAW_PATTERN.search(claim):
         return True
     return any(term in text for term in MATERIAL_TERMS)
 
@@ -127,7 +181,17 @@ def _citation_lookup(citations: list[dict[str, Any]]) -> dict[str, dict[str, Any
     return lookup
 
 
-def _required_norm_is_answered(answer: str, label: str) -> bool:
+def _citation_matches_norm(citation: dict[str, Any], law: str, para: str) -> bool:
+    source_law = _normalize_law(str(citation.get("gesetz", "") or citation.get("abkürzung", "")))
+    source_para = _normalize_para(str(citation.get("paragraph", "")))
+    return source_law == law and source_para == para
+
+
+def _required_norm_is_answered(
+    answer: str,
+    label: str,
+    citation_by_id: dict[str, dict[str, Any]] | None = None,
+) -> bool:
     law_match = LAW_PATTERN.search(label or "")
     para = _normalize_para(label)
     if not law_match or not para:
@@ -135,7 +199,15 @@ def _required_norm_is_answered(answer: str, label: str) -> bool:
     law = _normalize_law(law_match.group(1))
     answer_laws = {_normalize_law(m.group(1)) for m in LAW_PATTERN.finditer(answer or "")}
     answer_paras = {_normalize_para(m.group(0)) for m in PARA_PATTERN.finditer(answer or "")}
-    return law in answer_laws and para in answer_paras
+    if law in answer_laws and para in answer_paras:
+        return True
+
+    citations = citation_by_id or {}
+    return any(
+        _citation_matches_norm(citations[cid], law, para)
+        for cid in _extract_citation_ids(answer)
+        if cid in citations
+    )
 
 
 def _profile_deadline_issue(answer: str, plan_data: dict[str, Any]) -> str:
@@ -174,7 +246,7 @@ def audit_answer_sources(
         if not _is_material_claim(claim):
             continue
         material_claims += 1
-        claim_citation_ids = CITATION_PATTERN.findall(claim)
+        claim_citation_ids = _extract_citation_ids(claim)
         if claim_citation_ids:
             cited_claims += 1
         else:
@@ -266,7 +338,7 @@ def audit_answer_sources(
     missing_required_in_answer = [
         label
         for label in plan_data.get("required_norms") or []
-        if label not in missing_in_retrieval and not _required_norm_is_answered(answer, label)
+        if label not in missing_in_retrieval and not _required_norm_is_answered(answer, label, citation_by_id)
     ]
     for label in missing_required_in_answer:
         issues.append(

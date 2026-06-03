@@ -56,3 +56,28 @@ def test_sse_serializes_strict_json_without_nan():
     assert "event: search" in event
     assert "NaN" not in event
     assert '"score": null' in event
+
+
+def test_unavailable_answer_audit_is_not_a_legal_fail():
+    audit = modal_deploy._answer_unavailable_audit("gemini: temporary failure")
+
+    assert audit["status"] == "error"
+    assert audit["score"] is None
+    assert audit["high_severity_count"] == 0
+    assert audit["missing_required_in_answer"] == []
+
+
+def test_ask_context_limit_includes_trailing_recommended_norms():
+    results = [
+        {"context_type": "primary"},
+        {"context_type": "primary"},
+        {"context_type": "primary"},
+        {"context_type": "primary"},
+        {"context_type": "primary"},
+        {"context_type": "primary"},
+        {"context_type": "primary"},
+        {"context_type": "primary"},
+        {"context_type": "recommended_norm"},
+    ]
+
+    assert modal_deploy._ask_context_limit(results, top_k=5) == 9

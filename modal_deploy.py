@@ -358,6 +358,16 @@ aktuelle Stand geprüft werden muss."""
     return user_prompt, citations
 
 
+def _ask_context_limit(search_results: list[dict], top_k: int) -> int:
+    """Include mandatory/recommended injected norms even when they exceed top_k."""
+    baseline = top_k + 3
+    last_priority_idx = 0
+    for idx, result in enumerate(search_results, 1):
+        if result.get("context_type") in {"required_norm", "recommended_norm"}:
+            last_priority_idx = idx
+    return min(len(search_results), max(baseline, last_priority_idx))
+
+
 def _safe_float(value, default: float = 0.0) -> float:
     """Return a JSON-safe finite float for scores from vector/rerank backends."""
     try:
@@ -569,6 +579,28 @@ def _audit_generated_answer(
         }
 
 
+def _answer_unavailable_audit(detail: str) -> dict:
+    """Return a non-legal audit status when no generated answer exists."""
+    return {
+        "status": "error",
+        "score": None,
+        "material_claims": 0,
+        "cited_claims": 0,
+        "issue_count": 1,
+        "high_severity_count": 0,
+        "medium_severity_count": 0,
+        "issues": [{
+            "issue": "answer_generation_failed",
+            "severity": "medium",
+            "claim": "",
+            "detail": detail,
+            "citation_ids": [],
+        }],
+        "missing_required_in_answer": [],
+        "retrieval_missing_required": [],
+    }
+
+
 # ---------------------------------------------------------------------------
 # FastAPI web app
 # ---------------------------------------------------------------------------
@@ -652,7 +684,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                 yield "event: done\ndata: {}\n\n"
                 return
 
-            context_k = min(len(search_results), top_k + 3)
+            context_k = _ask_context_limit(search_results, top_k)
             user_prompt, citations = _build_ask_context(
                 search_results,
                 q,
@@ -793,7 +825,7 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
             "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
         })
 
-    context_k = min(len(search_results), top_k + 3)
+    context_k = _ask_context_limit(search_results, top_k)
     user_prompt, citations = _build_ask_context(
         search_results,
         q,
@@ -802,7 +834,7 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
         source_audit=enhanced_result.get("source_audit"),
     )
 
-    last_error = ""
+    provider_errors: list[str] = []
     answer_text = ""
     model_used = ""
     for p in _provider_order(os.getenv("LLM_PROVIDER", "gemini")):
@@ -810,12 +842,25 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
             answer_text, model_used = _call_llm_provider(p, user_prompt)
             break
         except Exception as e:
-            last_error = f"{p}: {e}"
+            provider_errors.append(f"{p}: {e}")
             continue
 
     if not answer_text:
+        last_error = "; ".join(provider_errors) if provider_errors else "Keine Provider konfiguriert"
         answer_text = f"KI-Schnittstellen nicht erreichbar. ({last_error})"
         model_used = "error"
+        return _json_safe({
+            "answer": answer_text,
+            "citations": citations,
+            "rewritten_queries": enhanced_result.get("rewritten_queries", [q]),
+            "rechtsgebiet": enhanced_result.get("rechtsgebiet"),
+            "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
+            "retrieval_plan": enhanced_result.get("retrieval_plan"),
+            "source_audit": enhanced_result.get("source_audit"),
+            "model": model_used,
+            "citation_warnings": [],
+            "answer_audit": _answer_unavailable_audit(last_error),
+        })
 
     # Verify citations in answer (same guardrail as generate_answer)
     answer_text, citation_warnings = _verify_citations(answer_text, citations)

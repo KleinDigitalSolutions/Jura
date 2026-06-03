@@ -6,7 +6,9 @@ from unittest.mock import MagicMock
 from src.retrieval.enhanced_search import EnhancedLegalSearch
 from src.retrieval.legal_quality import (
     apply_legal_quality,
+    build_answer_requirements,
     build_retrieval_plan,
+    plan_to_dict,
     source_key,
 )
 
@@ -46,6 +48,19 @@ def test_retrieval_plan_detects_employee_ordinary_termination_profile():
         "BetrVG § 102",
     ]
     assert "BGB § 580a" in [n.label for n in plan.excluded_norms]
+
+
+def test_answer_requirements_force_sentence_level_citations_for_termination_profile():
+    plan = build_retrieval_plan(
+        "Welche Anforderungen gelten für eine ordentliche Kündigung eines Arbeitnehmers?",
+        rechtsgebiet="Arbeitsrecht",
+    )
+
+    requirements = build_answer_requirements(plan_to_dict(plan), None)
+
+    assert "Jeder einzelne Satz mit rechtlicher Aussage braucht eine eigene Quellen-ID" in requirements
+    assert "Sonderkündigungsschutz nur nennen" in requirements
+    assert "SGB IX § 168" in requirements
 
 
 def test_apply_legal_quality_injects_required_sources_and_filters_false_positive():
