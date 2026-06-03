@@ -5,6 +5,7 @@ Test:    curl https://aliundmaggy--legal-rag-fastapi-app.modal.run/api/legal/sea
 """
 
 import json
+import math
 import os
 import re
 import sys
@@ -142,7 +143,7 @@ ABSOLUT VERBOTEN
     secrets=[DEEPSEEK_SECRET, ANTHROPIC_SECRET, GEMINI_SECRET],
     gpu="T4",
 )
-@modal.concurrent(max_inputs=10)
+@modal.concurrent(max_inputs=1)
 class LegalRAG:
     @modal.enter()
     def load(self):
@@ -320,7 +321,7 @@ def _build_ask_context(
             "paragraph": para,
             "titel": titel,
             "url": r.get("url", ""),
-            "score": r.get("rerank_score", r.get("score", 0)),
+            "score": _safe_float(r.get("rerank_score", r.get("score", 0))),
             "text_preview": inhalt[:500],
             "context_type": ctype or "primary",
             "stand": stand,
@@ -355,6 +356,33 @@ WICHTIG: Falls ein Gesetzestext mit "⚠️ ÄLTER ALS 2 JAHRE" markiert ist,
 weise den Mandanten darauf hin, dass Änderungen möglich sind und der 
 aktuelle Stand geprüft werden muss."""
     return user_prompt, citations
+
+
+def _safe_float(value, default: float = 0.0) -> float:
+    """Return a JSON-safe finite float for scores from vector/rerank backends."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
+
+
+def _json_safe(value):
+    """Recursively remove non-JSON values before FastAPI/SSE serialization."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+def _sse(event: str, data: dict | list | str) -> str:
+    payload = json.dumps(_json_safe(data), allow_nan=False)
+    return f"event: {event}\ndata: {payload}\n\n"
 
 
 def _provider_order(provider: str) -> list[str]:
@@ -585,12 +613,12 @@ async def legal_search(q: str = "", top_k: int = 10, rechtsgebiet: str = "", ges
         return err
     top_k = max(1, min(top_k, MAX_TOP_K))
     rag = LegalRAG()
-    results = rag.search.remote(
+    results = await rag.search.remote.aio(
         q, top_k=top_k,
         rechtsgebiet=rechtsgebiet or None,
         gesetz=gesetz or None,
     )
-    return {"query": q, "results": results, "count": len(results)}
+    return _json_safe({"query": q, "results": results, "count": len(results)})
 
 
 @web_app.get("/api/legal/ask")
@@ -601,8 +629,8 @@ async def legal_ask(q: str = "", top_k: int = 5):
         return err
     top_k = max(1, min(top_k, MAX_TOP_K))
     rag = LegalRAG()
-    result = rag.generate_answer.remote(q, top_k=top_k)
-    return result
+    result = await rag.generate_answer.remote.aio(q, top_k=top_k)
+    return _json_safe(result)
 
 
 @web_app.get("/api/legal/ask/stream")
@@ -616,11 +644,11 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
 
     async def event_stream():
         try:
-            enhanced_result = rag.enhanced_search.remote(q, top_k=top_k)
+            enhanced_result = await rag.enhanced_search.remote.aio(q, top_k=top_k)
             search_results = enhanced_result.get("results", [])
 
             if not search_results:
-                yield "event: error\ndata: " + json.dumps({"message": "Keine relevanten Gesetzesstellen gefunden."}) + "\n\n"
+                yield _sse("error", {"message": "Keine relevanten Gesetzesstellen gefunden."})
                 yield "event: done\ndata: {}\n\n"
                 return
 
@@ -633,7 +661,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                 source_audit=enhanced_result.get("source_audit"),
             )
 
-            yield "event: search\ndata: " + json.dumps({
+            yield _sse("search", {
                 "citations": citations,
                 "count": len(citations),
                 "rewritten_queries": enhanced_result.get("rewritten_queries", [q]),
@@ -641,7 +669,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                 "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
                 "retrieval_plan": enhanced_result.get("retrieval_plan"),
                 "source_audit": enhanced_result.get("source_audit"),
-            }) + "\n\n"
+            })
 
             last_error = ""
             success = False
@@ -651,7 +679,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                     if p == "gemini":
                         text, model_used = _call_gemini(user_prompt)
                         answer_parts.append(text)
-                        yield "event: token\ndata: " + json.dumps(text) + "\n\n"
+                        yield _sse("token", text)
                         success = True
                         break
                     elif p == "anthropic":
@@ -668,7 +696,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                         ) as stream:
                             for text in stream.text_stream:
                                 answer_parts.append(text)
-                                yield "event: token\ndata: " + json.dumps(text) + "\n\n"
+                                yield _sse("token", text)
                         model_used = "claude-3-5-sonnet"
                         success = True
                         break
@@ -693,7 +721,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                             delta = chunk.choices[0].delta.content
                             if delta:
                                 answer_parts.append(delta)
-                                yield "event: token\ndata: " + json.dumps(delta) + "\n\n"
+                                yield _sse("token", delta)
                         model_used = "deepseek-chat"
                         success = True
                         break
@@ -702,7 +730,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                     continue
 
             if not success:
-                yield "event: error\ndata: " + json.dumps({"message": f"KI-Modelle nicht erreichbar. ({last_error})"}) + "\n\n"
+                yield _sse("error", {"message": f"KI-Modelle nicht erreichbar. ({last_error})"})
                 yield "event: done\ndata: {}\n\n"
                 return
 
@@ -720,9 +748,9 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                     if verified_answer.startswith(raw_answer)
                     else "\n\n" + verified_answer
                 )
-                yield "event: token\ndata: " + json.dumps(extra) + "\n\n"
+                yield _sse("token", extra)
 
-            yield "event: done\ndata: " + json.dumps({
+            yield _sse("done", {
                 "model": model_used,
                 "citation_warnings": citation_warnings,
                 "rewritten_queries": enhanced_result.get("rewritten_queries", [q]),
@@ -731,10 +759,10 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                 "retrieval_plan": enhanced_result.get("retrieval_plan"),
                 "source_audit": enhanced_result.get("source_audit"),
                 "answer_audit": answer_audit,
-            }) + "\n\n"
+            })
 
         except Exception as e:
-            yield "event: error\ndata: " + json.dumps({"message": str(e)}) + "\n\n"
+            yield _sse("error", {"message": str(e)})
             yield "event: done\ndata: {}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -753,17 +781,17 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
     top_k = max(1, min(top_k, MAX_TOP_K))
 
     rag = LegalRAG()
-    enhanced_result = rag.enhanced_search.remote(q, top_k=top_k)
+    enhanced_result = await rag.enhanced_search.remote.aio(q, top_k=top_k)
 
     search_results = enhanced_result.get("results", [])
     if not search_results:
-        return {
+        return _json_safe({
             "answer": "Keine relevanten Gesetzesstellen gefunden.",
             "citations": [],
             "rewritten_queries": enhanced_result.get("rewritten_queries", [q]),
             "rechtsgebiet": enhanced_result.get("rechtsgebiet"),
             "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
-        }
+        })
 
     context_k = min(len(search_results), top_k + 3)
     user_prompt, citations = _build_ask_context(
@@ -798,7 +826,7 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
         source_audit=enhanced_result.get("source_audit"),
     )
 
-    return {
+    return _json_safe({
         "answer": answer_text,
         "citations": citations,
         "rewritten_queries": enhanced_result.get("rewritten_queries", [q]),
@@ -809,22 +837,22 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
         "model": model_used,
         "citation_warnings": citation_warnings,
         "answer_audit": answer_audit,
-    }
+    })
 
 
 @web_app.get("/api/legal/related/{doc_id:path}")
 async def legal_related(doc_id: str):
     """Get related paragraphs from knowledge graph."""
     rag = LegalRAG()
-    results = rag.get_related.remote(doc_id)
-    return {"doc_id": doc_id, "related": results, "count": len(results)}
+    results = await rag.get_related.remote.aio(doc_id)
+    return _json_safe({"doc_id": doc_id, "related": results, "count": len(results)})
 
 
 @web_app.get("/api/legal/stats")
 async def legal_stats():
     """Index statistics."""
     rag = LegalRAG()
-    return rag.stats.remote()
+    return await rag.stats.remote.aio()
 
 
 # ---------------------------------------------------------------------------
