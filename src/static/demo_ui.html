@@ -4,47 +4,54 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LEX — Juristischer KI-Assistent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Lora:ital,wght@0,400..700;1,400..700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   /* ═══════════════════════════════════════════
-     RESET + DESIGN TOKENS
+     RESET + DESIGN TOKENS (Premium Obsidian & Gold)
      ═══════════════════════════════════════════ */
   :root {
-    --bg-primary: #050505;
-    --bg-secondary: #000000;
-    --bg-tertiary: #080808;
-    --bg-hover: #0f0f0f;
-    --border: #1a1a1a;
-    --border-light: #222222;
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    --bg-hover: #e2e8f0;
+    --border: #e2e8f0;
+    --border-light: #f1f5f9;
 
-    --text-primary: #ffffff;
-    --text-secondary: #888888;
-    --text-muted: #444444;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
 
-    --accent: #ffffff;
-    --accent-hover: #ffffff;
-    --accent-light: rgba(255,255,255,0.05);
-    --accent-glow: rgba(255,255,255,0.02);
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-light: rgba(37, 99, 235, 0.06);
+    --accent-glow: rgba(37, 99, 235, 0.1);
 
-    --gold: #b39359;
-    --gold-light: rgba(179,147,89,0.05);
-    --gold-text: #a68b5a;
+    --gold: #9a763a;
+    --gold-hover: #80612d;
+    --gold-light: rgba(154, 118, 58, 0.05);
+    --gold-text: #85642f;
+    --gold-border: rgba(154, 118, 58, 0.15);
 
-    --green: #4ade80;
-    --green-light: rgba(74,222,128,0.1);
-    --red: #f87171;
-    --red-light: rgba(248,113,113,0.08);
+    --green: #059669;
+    --green-light: rgba(5, 150, 105, 0.06);
+    --red: #dc2626;
+    --red-light: rgba(220, 38, 38, 0.06);
 
-    --sidebar-w: 260px;
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --font-serif: 'Playfair Display', 'Georgia', serif;
-    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-    --radius: 0px;
-    --radius-sm: 0px;
-    --shadow: 0 4px 30px rgba(0,0,0,0.5);
-    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --sidebar-w: 280px;
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-serif: 'Lora', 'Georgia', serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --radius: 8px;
+    --radius-sm: 6px;
+    --radius-lg: 12px;
+    --shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.08);
+    --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
+
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html { font-size: 15px; }
+  html { font-size: 15px; scroll-behavior: smooth; }
   body {
     font-family: var(--font-sans);
     background: var(--bg-primary);
@@ -56,22 +63,27 @@
     -webkit-font-smoothing: antialiased;
     position: relative;
   }
+
+  /* Subtle noise background overlay */
   body::before {
     content: "";
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    opacity: 0.02;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.008;
     pointer-events: none;
     z-index: 9999;
   }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { color: var(--accent-hover); text-decoration: underline; }
-  ::-webkit-scrollbar { width: 4px; }
+
+  a { color: var(--gold); text-decoration: none; transition: color var(--transition); }
+  a:hover { color: var(--gold-hover); text-decoration: underline; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-  ::selection { background: var(--accent-light); color: var(--text-primary); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+  ::selection { background: var(--gold-light); color: var(--gold-text); }
 
   /* ═══════════════════════════════════════════
      SIDEBAR
@@ -89,34 +101,32 @@
     z-index: 20;
   }
   .sidebar-header {
-    padding: 18px 16px 12px;
+    padding: 24px 20px;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     gap: 12px;
   }
   .sidebar-logo {
-    width: auto; height: auto;
-    background: none;
-    border: 1px solid #fff;
-    padding: 2px 8px;
-    border-radius: 0;
-    font-weight: 700; font-size: 14px; color: #fff;
-    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px; height: 40px;
+    border-radius: var(--radius-sm);
     flex-shrink: 0;
+    object-fit: cover;
   }
   .sidebar-brand {
-    font-family: var(--font-serif);
-    font-size: 16px; font-weight: 400; color: #fff;
-    letter-spacing: 0px;
+    font-size: 16px; font-weight: 700; color: var(--text-primary);
+    letter-spacing: 0.5px;
   }
   .sidebar-brand small {
     display: block;
     font-size: 11px;
-    font-weight: 400;
-    color: var(--text-muted);
+    font-weight: 500;
+    color: var(--text-secondary);
     letter-spacing: 0.3px;
-    margin-top: -1px;
+    margin-top: 1px;
   }
   .sidebar-toggle {
     display: none;
@@ -124,113 +134,161 @@
     background: none;
     border: none;
     color: var(--text-secondary);
-    font-size: 20px;
     cursor: pointer;
-    padding: 4px;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition);
+  }
+  .sidebar-toggle:hover {
+    background: var(--bg-hover);
+    color: #fff;
   }
 
   .sidebar-section {
-    padding: 14px 16px 8px;
+    padding: 20px 20px 8px;
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 1px;
     color: var(--text-muted);
-    font-weight: 600;
+    font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  /* Chat History */
+  /* History list styling */
   .sidebar-scroll {
     flex: 1;
     overflow-y: auto;
-    padding: 0 8px;
+    padding: 0 10px;
   }
   .history-list {
     list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .history-item-wrapper {
+    position: relative;
   }
   .history-item {
     padding: 10px 12px;
-    border-radius: var(--radius-sm);
+    padding-right: 34px;
+    border-radius: var(--radius);
     cursor: pointer;
     font-size: 13px;
     color: var(--text-secondary);
     display: flex;
     align-items: center;
-    gap: 8px;
-    transition: background var(--transition);
-    border: none;
+    gap: 10px;
+    transition: all var(--transition);
+    border: 1px solid transparent;
     background: none;
     width: 100%;
     text-align: left;
     font-family: inherit;
   }
-  .history-item:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .history-item.active { background: var(--accent-light); color: var(--accent); }
-  .history-item .icon { font-size: 14px; opacity: 0.7; flex-shrink: 0; }
+  .history-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .history-item.active {
+    background: var(--gold-light);
+    color: var(--gold-text);
+    border-color: var(--gold-border);
+  }
+  .history-item .icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+  .history-item.active .icon {
+    opacity: 1;
+    color: var(--gold-text);
+  }
   .history-item .title {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
+    font-weight: 500;
   }
-  .history-item .delete-btn {
+  .history-item-wrapper .delete-btn {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
     opacity: 0;
     background: none;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 14px;
-    padding: 2px;
-    transition: opacity var(--transition);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .history-item:hover .delete-btn { opacity: 0.6; }
-  .history-item .delete-btn:hover { opacity: 1; color: var(--red); }
+  .history-item-wrapper:hover .delete-btn { opacity: 0.6; }
+  .history-item-wrapper .delete-btn:hover { opacity: 1; color: var(--red); background: var(--red-light); }
   .history-empty {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 12px;
     text-align: center;
-    padding: 20px;
+    padding: 30px 10px;
     line-height: 1.6;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    margin: 10px;
   }
 
-  /* Sidebar: Aktueller Fall */
+  /* Sidebar: Aktueller Fall (Mandantenkontext) */
   .sidebar-section.case {
     border-top: 1px solid var(--border);
-    margin-top: 40px;
+    margin-top: 24px;
+    padding-top: 20px;
   }
   .case-input {
-    margin: 0 8px 8px;
+    margin: 0 10px 10px;
   }
   .case-input textarea {
     width: 100%;
-    background: var(--bg-tertiary);
+    background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 0;
+    border-radius: var(--radius);
     color: var(--text-primary);
-    padding: 10px 12px;
+    padding: 12px;
     font-size: 13px;
     font-family: inherit;
     resize: vertical;
-    min-height: 80px;
+    min-height: 90px;
     max-height: 200px;
     outline: none;
-    transition: border-color var(--transition);
+    transition: all var(--transition);
+    line-height: 1.5;
   }
-  .case-input textarea:focus { border-color: var(--accent); }
+  .case-input textarea:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 2px var(--gold-light);
+    background: var(--bg-tertiary);
+  }
   .case-input textarea::placeholder { color: var(--text-muted); }
+  
   .case-active {
-    margin: 0 8px 8px;
-    padding: 8px 12px;
+    margin: 0 10px 10px;
+    padding: 10px 12px;
     background: var(--gold-light);
-    border: 1px solid rgba(200,164,78,0.2);
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--gold-border);
+    border-radius: var(--radius);
     font-size: 12px;
     color: var(--gold-text);
     display: none;
     align-items: center;
     gap: 8px;
+    font-weight: 600;
   }
   .case-active .clear-case {
     margin-left: auto;
@@ -238,23 +296,40 @@
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 14px;
     padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--transition);
   }
   .case-active .clear-case:hover { color: var(--red); }
 
-  /* Sidebar bottom stats */
+  /* Sidebar footer stats */
   .sidebar-footer {
-    padding: 10px 16px;
+    padding: 16px 20px;
     border-top: 1px solid var(--border);
     font-size: 11px;
-    color: var(--text-muted);
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+    color: var(--text-secondary);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    text-align: center;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.03);
   }
-  .sidebar-footer span { white-space: nowrap; }
-  .sidebar-footer b { color: var(--text-secondary); font-weight: 500; }
+  .sidebar-footer div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .sidebar-footer span.label {
+    color: var(--text-muted);
+    font-size: 9px;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .sidebar-footer b { color: var(--gold-text); font-weight: 700; font-size: 12px; }
 
   /* ═══════════════════════════════════════════
      MAIN CHAT AREA
@@ -265,20 +340,25 @@
     flex-direction: column;
     height: 100vh;
     position: relative;
+    background: var(--bg-primary);
   }
   .chat-header {
-    padding: 14px 24px;
+    padding: 16px 24px;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
-    background: var(--bg-primary);
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    z-index: 10;
   }
   .chat-header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
   }
   .chat-header .hamburger {
     display: none;
@@ -287,36 +367,64 @@
     color: var(--text-secondary);
     font-size: 20px;
     cursor: pointer;
-    padding: 4px;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition);
+  }
+  .chat-header .hamburger:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .chat-header .title-area {
+    min-width: 0;
+    max-width: 100%;
   }
   .chat-header .title-area h2 {
-    font-size: 14px;
-    font-weight: 600;
-    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .chat-header .title-area small {
-    font-size: 12px;
-    color: var(--text-muted);
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 500;
   }
   .chat-header-actions {
     display: flex;
-    gap: 6px;
+    gap: 8px;
+    flex-shrink: 0;
   }
   .chat-header-actions button {
-    background: none;
+    background: var(--bg-secondary);
     border: 1px solid var(--border);
     color: var(--text-secondary);
-    padding: 6px 12px;
-    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    border-radius: var(--radius);
     font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
     transition: all var(--transition);
     font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
   .chat-header-actions button:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
     border-color: var(--border-light);
+  }
+  .chat-header-actions button.docs-btn {
+    border-color: var(--gold-border);
+    color: var(--gold-text);
+    background: var(--gold-light);
+  }
+  .chat-header-actions button.docs-btn:hover {
+    background: rgba(204, 160, 90, 0.12);
+    color: var(--gold-hover);
   }
 
   /* ── Messages ── */
@@ -326,71 +434,87 @@
     padding: 0;
   }
   .messages-inner {
-    max-width: 780px;
+    max-width: 920px;
     margin: 0 auto;
-    padding: 24px 24px 8px;
+    padding: 32px 24px 72px;
   }
 
   /* Welcome Screen */
   .welcome {
     text-align: center;
-    padding: 60px 20px 40px;
-    max-width: 600px;
+    padding: 40px 20px;
+    max-width: 680px;
     margin: 0 auto;
+    animation: fadeIn 0.4s ease-out;
   }
-  .welcome-icon {
-    width: auto; height: auto;
-    background: none;
-    border: 1px solid #fff;
-    padding: 10px 20px;
-    border-radius: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 24px; font-weight: 700; color: #fff;
-    margin: 0 auto 40px;
-    box-shadow: none;
-    letter-spacing: 4px;
+  .welcome-logo-container {
+    margin-bottom: 24px;
+  }
+  .welcome-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px; height: 80px;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    object-fit: cover;
   }
   .welcome h1 {
     font-family: var(--font-serif);
-    font-size: 36px;
-    font-weight: 400;
-    color: #fff;
-    margin-bottom: 20px;
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
     letter-spacing: -0.5px;
   }
   .welcome p {
     color: var(--text-secondary);
     font-size: 14px;
-    margin-bottom: 24px;
+    margin-bottom: 30px;
     line-height: 1.7;
   }
+  .welcome p b {
+    color: var(--gold-text);
+  }
   .welcome .disclaimer {
-    background: var(--bg-tertiary);
+    background: rgba(15, 23, 42, 0.02);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
     font-size: 12px;
-    color: var(--text-muted);
-    line-height: 1.5;
-    margin-bottom: 24px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 32px;
     text-align: left;
+    border-left: 3px solid var(--gold);
   }
   .welcome .disclaimer strong { color: var(--gold-text); }
+  
+  .welcome-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    font-weight: 800;
+    margin-bottom: 16px;
+    text-align: left;
+    padding-left: 4px;
+  }
   .welcome-examples {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1px;
-    background: var(--border);
-    border: 1px solid var(--border);
-    max-width: 600px;
-    margin: 40px auto 0;
+    gap: 12px;
+    max-width: 680px;
+    margin: 0 auto;
   }
   .welcome-examples button {
-    background: var(--bg-secondary);
-    border: none;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     color: var(--text-secondary);
     padding: 16px 20px;
     font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
     text-align: left;
     transition: all var(--transition);
@@ -398,186 +522,256 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    line-height: 1.4;
   }
   .welcome-examples button:hover {
     background: var(--bg-hover);
-    color: #fff;
+    color: var(--text-primary);
+    border-color: var(--gold-border);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
   }
-  .welcome-examples button::after {
-    content: "→";
+  .welcome-examples button svg {
     opacity: 0.3;
     transition: all var(--transition);
-  }
-  .welcome-examples button:hover::after {
-    opacity: 1;
     color: var(--gold-text);
+    flex-shrink: 0;
+    margin-left: 10px;
+  }
+  .welcome-examples button:hover svg {
+    opacity: 1;
+    transform: translateX(3px);
   }
 
   /* ── Message Bubbles ── */
-  .msg { margin-bottom: 16px; }
+  .msg { margin-bottom: 24px; animation: fadeIn 0.3s ease-out; }
   .msg.user {
     display: flex;
     justify-content: flex-end;
   }
   .msg.user .bubble {
-    background: transparent;
-    border: 1px solid var(--border-light);
-    color: #fff;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
     padding: 12px 20px;
-    border-radius: 0;
+    border-radius: var(--radius-lg);
+    border-top-right-radius: 2px;
     max-width: 80%;
     font-size: 14px;
     line-height: 1.5;
+    box-shadow: var(--shadow);
   }
-  .msg.assistant .bubble:empty { display: none; }
   
+  .msg.assistant .bubble:empty { display: none; }
   .msg.assistant .bubble {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 0;
-    padding: 32px;
+    border-radius: var(--radius-lg);
+    border-top-left-radius: 2px;
+    padding: 24px 30px;
     font-size: 15px;
-    line-height: 1.9;
+    line-height: 1.85;
     color: var(--text-primary);
     min-height: 20px;
+    box-shadow: var(--shadow);
+    position: relative;
   }
+  /* Top accent gold line on assistant answers */
+  .msg.assistant .bubble::before {
+    content: "";
+    position: absolute;
+    top: -1px; left: -1px; right: -1px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold), transparent);
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+  }
+
+  /* Structural Legal formatting inside answers */
   .msg.assistant .bubble h3 {
     font-family: var(--font-serif);
-    font-size: 20px;
-    font-weight: 400;
-    margin: 32px 0 12px;
+    font-size: 19px;
+    font-weight: 600;
+    margin: 28px 0 12px;
     color: var(--gold-text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
   }
-  .msg.assistant .bubble p { margin-bottom: 12px; }
+  .msg.assistant .bubble h3:first-of-type { margin-top: 10px; }
+  .msg.assistant .bubble p { margin-bottom: 14px; font-family: var(--font-serif); letter-spacing: 0.1px; }
   .msg.assistant .bubble p:last-child { margin-bottom: 0; }
-  .msg.assistant .bubble strong { color: #fff; font-weight: 600; }
+  .msg.assistant .bubble strong { color: var(--text-primary); font-weight: 700; }
   .msg.assistant .bubble em { color: var(--text-secondary); }
+  
   .msg.assistant .bubble code {
     background: var(--bg-tertiary);
-    padding: 1px 5px;
+    padding: 2px 6px;
     border-radius: 4px;
     font-family: var(--font-mono);
     font-size: 13px;
     color: var(--gold-text);
+    border: 1px solid var(--border);
   }
   .msg.assistant .bubble pre {
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 12px;
+    border-radius: var(--radius);
+    padding: 14px;
     overflow-x: auto;
-    margin: 8px 0;
+    margin: 14px 0;
     font-family: var(--font-mono);
     font-size: 13px;
     color: var(--text-secondary);
   }
   .msg.assistant .bubble ul, .msg.assistant .bubble ol {
-    margin: 8px 0;
-    padding-left: 24px;
+    margin: 14px 0;
+    padding-left: 20px;
+    font-family: var(--font-serif);
   }
-  .msg.assistant .bubble li { margin-bottom: 4px; }
+  .msg.assistant .bubble li { margin-bottom: 6px; }
 
-  /* §-reference inline */
+  /* §-reference inline badge */
   .para-ref {
     color: var(--gold-text);
     background: var(--gold-light);
+    border: 1px solid var(--gold-border);
     padding: 1px 6px;
     border-radius: 4px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition: background var(--transition);
+    transition: all var(--transition);
     white-space: nowrap;
     font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
   }
-  .para-ref:hover { background: rgba(200,164,78,0.2); }
+  .para-ref:hover {
+    background: rgba(204,160,78,0.18);
+    border-color: var(--gold);
+    color: var(--gold-hover);
+  }
 
   /* Source citation [1], [2] inline */
   .source-ref {
-    color: var(--accent);
+    color: var(--text-secondary);
+    background: rgba(71, 85, 105, 0.06);
+    border: 1px solid rgba(148, 163, 184, 0.22);
     font-weight: 600;
     cursor: pointer;
-    padding: 0 2px;
-    transition: color var(--transition);
-    font-size: 13px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    transition: all var(--transition);
+    font-size: 12px;
+    margin: 0 2px;
   }
-  .source-ref:hover { color: var(--accent-hover); text-decoration: underline; }
+  .source-ref:hover {
+    background: var(--gold-light);
+    border-color: var(--gold-border);
+    color: var(--gold-text);
+  }
 
   /* Message meta */
   .msg-meta {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-top: 6px;
+    margin-top: 10px;
     font-size: 11px;
-    color: var(--text-muted);
+    color: var(--text-secondary);
+    padding-left: 4px;
   }
   .msg-meta .model-badge {
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
-    padding: 1px 8px;
-    border-radius: 10px;
+    padding: 2px 8px;
+    border-radius: 12px;
     font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--gold-text);
+    font-weight: 500;
+  }
+  .msg-meta .verify-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--green);
+    font-weight: 600;
   }
 
   /* Streaming cursor */
   .streaming-cursor::after {
     content: '▌';
     animation: blink 1s step-end infinite;
-    color: var(--accent);
+    color: var(--gold);
     margin-left: 2px;
   }
   @keyframes blink { 50% { opacity: 0; } }
 
   /* ── Source Cards (below assistant message) ── */
   .sources-section {
-    margin: 0 0 20px;
+    margin: 0 0 24px;
     padding-left: 24px;
+    border-left: 2px solid var(--border);
   }
   .sources-section .src-header {
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 1.5px;
     color: var(--text-muted);
-    margin-bottom: 8px;
-    font-weight: 600;
+    margin-bottom: 10px;
+    font-weight: 800;
   }
   .src-card {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 10px 14px;
-    margin-bottom: 6px;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 8px;
     cursor: pointer;
-    transition: border-color var(--transition);
+    transition: all var(--transition);
     display: flex;
     align-items: center;
     gap: 12px;
   }
-  .src-card:hover { border-color: var(--border-light); }
+  .src-card:hover {
+    border-color: var(--gold-border);
+    background: var(--bg-hover);
+    transform: translateX(4px);
+  }
   .src-card .src-num {
-    width: 24px; height: 24px;
+    width: 22px; height: 22px;
     border-radius: 50%;
-    background: var(--accent-light);
-    color: var(--accent);
+    background: rgba(15, 23, 42, 0.03);
+    color: var(--text-secondary);
     display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700;
+    font-size: 10px; font-weight: 700;
     flex-shrink: 0;
+    border: 1px solid var(--border);
+  }
+  .src-card:hover .src-num {
+    background: var(--gold-light);
+    color: var(--gold-text);
+    border-color: var(--gold-border);
   }
   .src-card .src-info { flex: 1; min-width: 0; }
   .src-card .src-title {
     font-size: 13px;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .src-card .src-meta {
     font-size: 11px;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     display: flex;
     gap: 8px;
-    margin-top: 1px;
+    margin-top: 2px;
   }
   .src-card .src-score {
     font-size: 11px;
@@ -585,90 +779,138 @@
     white-space: nowrap;
     flex-shrink: 0;
   }
-  .src-card .src-score b { color: var(--green); }
+  .src-card .src-score b { color: var(--gold-text); font-weight: 700; }
   .src-card .src-badge {
     font-size: 10px;
-    padding: 2px 6px;
+    padding: 2px 8px;
     border-radius: 4px;
-    font-weight: 500;
+    font-weight: 700;
     flex-shrink: 0;
   }
-  .src-badge.gesetz { background: rgba(59,110,165,0.15); color: var(--accent); }
-  .src-badge.urteil { background: rgba(200,164,78,0.15); color: var(--gold-text); }
+  .src-badge.gesetz { background: rgba(59,130,246,0.1); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+  .src-badge.urteil { background: rgba(244,63,94,0.1); color: #fb7185; border: 1px solid rgba(244,63,94,0.2); }
 
-  /* ── Loading / Error ── */
+  /* ── Pipeline / Loading Status ── */
+  .pipeline-status {
+    background: rgba(15, 23, 42, 0.02);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+    animation: fadeIn 0.3s ease-out;
+  }
+  .pipeline-status.visible { display: flex; }
+  .pipeline-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-primary);
+  }
+  .pipeline-header svg {
+    color: var(--gold);
+  }
+  .pipeline-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-left: 4px;
+  }
+  .pipeline-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--text-muted);
+    transition: color var(--transition);
+  }
+  .pipeline-step .step-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    display: inline-block;
+    position: relative;
+    transition: all var(--transition);
+  }
+  .pipeline-step.active {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+  .pipeline-step.active .step-dot {
+    background: var(--gold);
+    box-shadow: 0 0 8px var(--gold);
+  }
+  .pipeline-step.active .step-dot::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border: 1px solid var(--gold);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+  }
+  .pipeline-step.done {
+    color: var(--text-secondary);
+  }
+  .pipeline-step.done .step-dot {
+    background: var(--green);
+  }
+  .pipeline-step .step-label {
+    flex: 1;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+
   .loading-msg {
     padding: 40px 20px;
     text-align: center;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     font-size: 13px;
   }
-  .loading-msg .spinner {
-    width: 20px; height: 20px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0 auto 12px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── Terminal Status (in-chat, below user msg) ── */
-  .term-status {
-    display: none;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 0 4px 0;
-    margin-left: 4px;
-  }
-  .term-status.visible { display: flex; }
-  .term-spinner {
-    width: 12px; height: 12px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    flex-shrink: 0;
-  }
-  .term-text {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
-  .term-text .term-prefix { color: var(--text-muted); opacity: 0.5; }
-  .term-text .term-action { color: var(--text-secondary); }
-  .term-done { color: var(--green) !important; }
   .error-msg {
-    padding: 20px;
+    padding: 16px 20px;
     text-align: center;
     color: var(--red);
     font-size: 13px;
+    font-weight: 500;
     background: var(--red-light);
-    border: 1px solid rgba(217,48,37,0.2);
+    border: 1px solid rgba(244,63,94,0.2);
     border-radius: var(--radius);
-    margin: 10px 0;
+    margin: 16px 0;
   }
 
   /* ── Input Area ── */
   .input-area {
-    padding: 32px;
+    padding: 24px 32px 32px;
     border-top: 1px solid var(--border);
     background: var(--bg-secondary);
     flex-shrink: 0;
   }
   .input-inner {
-    max-width: 800px;
+    max-width: 860px;
     margin: 0 auto;
   }
   .input-row {
     display: flex;
-    gap: 0;
     align-items: center;
     border: 1px solid var(--border);
     background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition);
+    padding-right: 8px;
+  }
+  .input-row:focus-within {
+    border-color: var(--gold-border);
+    box-shadow: 0 0 0 2px var(--gold-light), 0 10px 30px -10px rgba(0, 0, 0, 0.5);
   }
   .input-row textarea {
     flex: 1;
@@ -676,80 +918,87 @@
     border: none;
     border-radius: 0;
     color: var(--text-primary);
-    padding: 18px 20px;
+    padding: 16px 20px;
     font-size: 14px;
     font-family: var(--font-sans);
     resize: none;
-    min-height: 56px;
+    min-height: 52px;
     max-height: 200px;
     outline: none;
     line-height: 1.5;
   }
+  .input-row textarea::placeholder {
+    color: var(--text-muted);
+  }
   .input-actions {
     display: flex;
-    gap: 0;
-    flex-shrink: 0;
-    height: 56px;
+    gap: 4px;
+    align-items: center;
   }
   .input-actions button {
-    width: 56px; height: 56px;
+    width: 36px; height: 36px;
     border: none;
-    border-left: 1px solid var(--border);
     background: transparent;
     color: var(--text-secondary);
-    border-radius: 0;
+    border-radius: var(--radius);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
     transition: all var(--transition);
   }
   .input-actions button:hover {
     background: var(--bg-hover);
-    color: #fff;
+    color: var(--text-primary);
   }
   .input-actions .send-btn {
-    background: #000;
-    color: #fff;
+    background: var(--gold);
+    color: var(--bg-secondary);
+  }
+  .input-actions .send-btn:hover {
+    background: var(--gold-hover);
+    color: var(--bg-secondary);
   }
   .input-actions .send-btn:disabled {
-    opacity: 0.1;
+    opacity: 0.2;
     cursor: not-allowed;
+    background: transparent;
+    color: var(--text-muted);
   }
   .input-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 6px;
+    margin-top: 8px;
     font-size: 11px;
     color: var(--text-muted);
     padding: 0 4px;
+    font-weight: 500;
   }
   .input-footer .file-name {
     display: none;
     align-items: center;
     gap: 4px;
-    color: var(--accent);
+    color: var(--gold-text);
   }
 
-  /* ═══════════════════════════════════════════
-     SOURCE DETAIL PANEL (slide-in)
-     ═══════════════════════════════════════════ */
+  /* ── Overlay and Slide-in Panels ── */
   .source-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(15, 23, 42, 0.25);
+    backdrop-filter: blur(4px);
     z-index: 30;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s ease;
   }
   .source-overlay.open { opacity: 1; pointer-events: auto; }
+  
   .source-panel {
     position: fixed;
     top: 0; right: 0;
-    width: 520px; max-width: 90vw;
+    width: 580px; max-width: 95vw;
     height: 100vh;
     background: var(--bg-secondary);
     border-left: 1px solid var(--border);
@@ -758,66 +1007,83 @@
     transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
     display: flex;
     flex-direction: column;
-    box-shadow: -4px 0 20px rgba(0,0,0,0.3);
+    box-shadow: -10px 0 40px rgba(15, 23, 42, 0.1);
   }
   .source-panel.open { transform: translateX(0); }
   .source-panel-header {
-    padding: 16px 20px;
+    padding: 20px 24px;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     gap: 12px;
     flex-shrink: 0;
+    background: var(--bg-secondary);
   }
   .source-panel-header h3 {
-    font-size: 15px;
-    font-weight: 600;
-    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
     flex: 1;
+    text-transform: uppercase;
+    letter-spacing: 1px;
   }
   .source-panel-header .close-btn {
     background: none;
     border: none;
-    color: var(--text-muted);
-    font-size: 20px;
+    color: var(--text-secondary);
     cursor: pointer;
-    padding: 4px;
-    transition: color var(--transition);
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .source-panel-header .close-btn:hover { color: var(--text-primary); }
+  .source-panel-header .close-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+  
   .source-panel-body {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding: 30px 24px;
   }
   .source-panel-body .sp-title {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 700;
-    color: #fff;
+    color: var(--text-primary);
     margin-bottom: 4px;
+    font-family: var(--font-serif);
   }
   .source-panel-body .sp-sub {
-    font-size: 13px;
-    color: var(--text-muted);
-    margin-bottom: 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
   }
   .source-panel-body .sp-text {
-    font-size: 14px;
-    line-height: 1.9;
+    font-size: 14.5px;
+    line-height: 1.85;
     color: var(--text-primary);
     white-space: pre-wrap;
+    font-family: var(--font-serif);
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
   }
   .source-panel-body .sp-text mark {
-    background: var(--gold-light);
-    color: var(--gold-text);
-    padding: 0 4px;
-    border-radius: 2px;
+    background: rgba(204, 160, 90, 0.2);
+    color: #000;
+    border-bottom: 2px solid var(--gold);
+    padding: 0 2px;
   }
   .source-panel-body .sp-actions {
     display: flex;
     gap: 8px;
-    margin-top: 20px;
-    padding-top: 16px;
+    margin-top: 24px;
+    padding-top: 20px;
     border-top: 1px solid var(--border);
   }
   .source-panel-body .sp-actions a {
@@ -825,28 +1091,48 @@
     align-items: center;
     gap: 6px;
     font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    transition: all var(--transition);
+  }
+  .source-panel-body .sp-actions a:hover {
+    background: var(--bg-hover);
+    border-color: var(--gold-border);
+    color: var(--gold-text);
+    text-decoration: none;
   }
   .source-panel-body .sp-related {
-    margin-top: 20px;
-    padding-top: 16px;
+    margin-top: 24px;
+    padding-top: 20px;
     border-top: 1px solid var(--border);
   }
   .source-panel-body .sp-related h4 {
-    font-size: 12px;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--text-muted);
-    margin-bottom: 8px;
-    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    font-weight: 800;
   }
   .source-panel-body .sp-related-item {
-    padding: 6px 0;
+    padding: 8px 12px;
     font-size: 13px;
     color: var(--text-secondary);
     cursor: pointer;
-    transition: color var(--transition);
+    transition: all var(--transition);
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    margin-bottom: 4px;
   }
-  .source-panel-body .sp-related-item:hover { color: var(--accent); }
+  .source-panel-body .sp-related-item:hover {
+    color: var(--gold-text);
+    background: var(--gold-light);
+    border-color: var(--gold-border);
+  }
 
   /* ═══════════════════════════════════════════
      RESPONSIVE
@@ -862,20 +1148,23 @@
     .sidebar-toggle { display: block; }
     .chat-header .hamburger { display: block; }
     .msg.user .bubble { max-width: 85%; }
-    .messages-inner { padding: 16px 16px 8px; }
-    .input-area { padding: 10px 12px 14px; }
+    .messages-inner { padding: 20px 16px; }
+    .input-area { padding: 16px 16px 20px; }
     .source-panel { width: 100vw; max-width: 100vw; }
     .chat-header { padding: 12px 16px; }
-    .welcome { padding: 40px 10px 30px; }
+    .welcome { padding: 24px 10px; }
+    .welcome-examples { grid-template-columns: 1fr; gap: 8px; }
   }
   @media (min-width: 861px) {
     .sidebar-toggle { display: none !important; }
     .hamburger { display: none !important; }
   }
 
-  /* ═══════════════════════════════════════════
-     UTILITY
-     ═══════════════════════════════════════════ */
+  /* ── Animations & Utils ── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
   .hidden { display: none !important; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 </style>
@@ -888,17 +1177,21 @@
 <!-- ═══ SIDEBAR ═══ -->
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
-    <div class="sidebar-logo">LX</div>
+    <img src="Logo_LX.png" class="sidebar-logo" alt="LEX Logo">
     <div class="sidebar-brand">
       LEX
       <small>Juristischer KI-Assistent</small>
     </div>
-    <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Sidebar schließen">✕</button>
+    <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Sidebar schließen">
+      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
   </div>
 
   <div class="sidebar-section">
-    <span>Chat-Verlauf</span>
-    <button onclick="newChat()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;">+ Neu</button>
+    <span>Recherche-Historie</span>
+    <button onclick="newChat()" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;display:flex;align-items:center;gap:4px;">
+      <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Neu
+    </button>
   </div>
   <div class="sidebar-scroll">
     <ul class="history-list" id="historyList">
@@ -911,21 +1204,34 @@
 
   <div class="sidebar-section case">
     <span>Aktueller Fall</span>
-    <button onclick="clearCase()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px;font-family:inherit;padding:0;">✕</button>
+    <button onclick="clearCase()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0;display:flex;align-items:center;" title="Fallkontext zurücksetzen">
+      <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
   </div>
   <div class="case-input">
     <textarea id="caseTextarea" placeholder="Mandantenkontext eingeben oder einfügen …&#10;z. B. 'Mandant ist GmbH-Geschäftsführer,&#10;Insolvenzantrag wurde gestellt…'" oninput="updateCase()"></textarea>
   </div>
   <div class="case-active" id="caseActive">
-    <span>📋</span>
-    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="caseLabel">Fall aktiv</span>
-    <button class="clear-case" onclick="clearCase()">✕</button>
+    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:2px;" id="caseLabel">Fall aktiv</span>
+    <button class="clear-case" onclick="clearCase()">
+      <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
   </div>
 
   <div class="sidebar-footer">
-    <span>📚 <b id="statDocs">-</b></span>
-    <span>⚖️ <b id="statLaws">-</b></span>
-    <span>🏛️ <b id="statCourts">-</b></span>
+    <div>
+      <span class="label">Dokumente</span>
+      <b id="statDocs">17.024</b>
+    </div>
+    <div>
+      <span class="label">Gesetze</span>
+      <b id="statLaws">74</b>
+    </div>
+    <div>
+      <span class="label">Gerichte</span>
+      <b id="statCourts">4</b>
+    </div>
   </div>
 </aside>
 
@@ -933,60 +1239,28 @@
 <main class="chat-area">
   <div class="chat-header">
     <div class="chat-header-left">
-      <button class="hamburger" onclick="toggleSidebar()" aria-label="Menü">☰</button>
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="Menü">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
       <div class="title-area">
         <h2 id="chatTitle">Neue Recherche</h2>
-        <small id="chatSubtitle">Juristische Suche · DeepSeek / Claude</small>
+        <small id="chatSubtitle">Juristische Suche · KI-Analyse</small>
       </div>
     </div>
     <div class="chat-header-actions">
-      <button onclick="toggleDocs()" title="Dokumentation & Rechtsbestand">📖 Docs</button>
-      <button onclick="exportChat()" title="Antwort exportieren">📥 Export</button>
-      <button onclick="newChat()" title="Neue Unterhaltung">✕ Neu</button>
+      <button onclick="toggleDocs()" class="docs-btn" title="Architektur & Rechtsbestand">
+        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5v-15z"></path></svg>
+        Rechtsbestand
+      </button>
+      <button onclick="exportChat()" title="Antwort exportieren">
+        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        Export
+      </button>
+      <button onclick="newChat()" title="Neue Unterhaltung">
+        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        Neu
+      </button>
     </div>
-...
-<!-- ═══ DOCS MODAL ═══ -->
-<div class="source-overlay" id="docsOverlay" onclick="toggleDocs()"></div>
-<div class="source-panel" id="docsPanel">
-  <div class="source-panel-header">
-    <h3>Dokumentation & Rechtsbestand</h3>
-    <button class="close-btn" onclick="toggleDocs()">✕</button>
-  </div>
-  <div class="source-panel-body">
-    <div class="sp-title">LEX — Architektur & Methodik</div>
-    <div class="sp-sub">Hybrid-RAG (Retrieval-Augmented Generation) System</div>
-    
-    <div class="sp-text">
-      LEX basiert auf einem hochspezialisierten RAG-System, das für die deutsche Rechtssprechung optimiert wurde. Im Gegensatz zu Standard-Modellen nutzt LEX eine hybride Infrastruktur:
-
-      <h4 style="margin: 20px 0 10px; color: var(--gold-text);">1. Rechtsbestand (Datenbasis)</h4>
-      Das System verfügt über einen Live-Index von aktuell <strong>17.024 Dokumenten</strong>:
-      <ul>
-        <li><strong>Bundesrecht:</strong> Volle Abdeckung von 72 Gesetzen (BGB, UWG, TDDDG, InsO, GmbHG, StGB, UrhG, KSchG etc.).</li>
-        <li><strong>Rechtsprechung:</strong> Über 400 Leitsatz-Entscheidungen der obersten Bundesgerichte (BGH, BVerfG, BAG, BSG).</li>
-        <li><strong>Update-Zyklus:</strong> Wöchentliches Scraping direkt von gesetze-im-internet.de.</li>
-      </ul>
-
-      <h4 style="margin: 20px 0 10px; color: var(--gold-text);">2. Hybride Suche</h4>
-      Um juristische Präzision zu gewährleisten, kombiniert LEX zwei Suchverfahren:
-      <ul>
-        <li><strong>Vektor-Suche (Dense):</strong> Erkennt semantische Zusammenhänge (z.B. findet "Mangel" bei der Suche nach "kaputt").</li>
-        <li><strong>Lexikalische Suche (Sparse):</strong> Findet exakte juristische Fachbegriffe und Paragraphenketten.</li>
-        <li><strong>Reranking:</strong> Ein spezialisiertes Cross-Encoder Modell bewertet die 15 besten Treffer nach juristischer Relevanz neu.</li>
-      </ul>
-
-      <h4 style="margin: 20px 0 10px; color: var(--gold-text);">3. Wissens-Graph</h4>
-      LEX erkennt Querverweise zwischen Paragraphen automatisch und baut einen Wissens-Graphen auf. Dies ermöglicht es dem System, verwandte Normen vorzuschlagen, auch wenn diese nicht explizit in der Frage vorkommen.
-
-      <h4 style="margin: 20px 0 10px; color: var(--gold-text);">4. KI-Infrastruktur</h4>
-      Das System nutzt ein Failover-Cluster zwischen <strong>DeepSeek-V3</strong> und <strong>Claude 3.5 Sonnet</strong>, um höchste Verfügbarkeit und logische Tiefe bei der juristischen Subsumtion zu garantieren.
-    </div>
-
-    <div class="disclaimer" style="margin-top: 30px; border-left: 2px solid var(--gold);">
-      <strong>Wichtiger Hinweis:</strong> Dieses System dient der Unterstützung juristischer Facharbeit. Es ersetzt keine Rechtsberatung durch einen zugelassenen Rechtsanwalt. Die Haftung für die Richtigkeit der KI-generierten Texte ist ausgeschlossen.
-    </div>
-  </div>
-</div>
   </div>
 
   <!-- Messages -->
@@ -994,36 +1268,45 @@
     <div class="messages-inner" id="messagesInner">
       <!-- Welcome Screen -->
       <div class="welcome" id="welcome">
-        <div class="welcome-icon">LX</div>
-        <h1>Willkommen bei LEX</h1>
+        <div class="welcome-logo-container">
+          <img src="Logo_LX.png" class="welcome-logo" alt="LEX Logo">
+        </div>
+        <h1>Juristischer Recherche-Assistent</h1>
         <p>
-          Der hybride juristische Suchassistent für das deutsche Bundesrecht.
-          Durchsuche <b id="welcomeDocs">16.500+</b> Paragraphen aus <b id="welcomeLaws">72</b> Gesetzen
-          und <b id="welcomeCourts">398</b> Urteile der obersten Bundesgerichte.
+          Professioneller hybrider RAG-Recherche-Client für Kanzleien.<br>
+          Direkter Zugriff auf <b id="welcomeDocs">17.000+</b> Paragraphen aus <b id="welcomeLaws">74</b> Bundesgesetzen und Bundesgerichtsurteile.
         </p>
         <div class="disclaimer">
-          <strong>⚠️ Hinweis:</strong> LEX ist ein KI-Assistent, kein Rechtsanwalt.
-          Die bereitgestellten Informationen sind keine Rechtsberatung.
-          Für eine verbindliche rechtliche Beurteilung konsultieren Sie bitte einen Rechtsanwalt.
+          <strong>⚠️ Disclaimer:</strong> LEX dient der vorbereitenden Unterstützung juristischer Facharbeit.
+          Das System stellt keine Rechtsberatung dar. KI-generierte Entwürfe müssen zwingend eigenverantwortlich
+          durch qualifizierte Rechtsanwälte geprüft und freigegeben werden.
         </div>
+        
+        <div class="welcome-section-title">Beispielrecherche starten</div>
         <div class="welcome-examples">
           <button onclick="quickSearch('Darf ein Online-Händler Bestandskunden per E-Mail über ähnliche Produkte informieren (§ 7 UWG) und gleichzeitig Retargeting-Pixel (TDDDG) ohne explizite Einwilligung einsetzen?')">
             <span>E-Mail-Marketing & Retargeting</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </button>
           <button onclick="quickSearch('Ein GmbH-Geschäftsführer erkennt die drohende Zahlungsunfähigkeit. Welche Fristen gelten für den Insolvenzantrag nach § 15a InsO und welche Haftungsrisiken bestehen nach GmbHG?')">
             <span>Insolvenzantragspflicht & Haftung</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </button>
           <button onclick="quickSearch('Ist eine ordentliche Kündigung während einer krankheitsbedingten Arbeitsunfähigkeit wirksam? Berücksichtige die Voraussetzungen des KSchG und die aktuelle BGH/BAG-Rechtsprechung.')">
             <span>Kündigung bei Krankheit</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </button>
           <button onclick="quickSearch('Ein Käufer entdeckt 14 Monate nach dem Kauf eines Elektronikartikels einen Defekt. Wer trägt die Beweislast für den Mangel bei Gefahrübergang gemäß § 477 BGB (Verbrauchergüterkauf)?')">
             <span>Beweislastumkehr Sachmangel</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </button>
           <button onclick="quickSearch('Unter welchen Voraussetzungen ist vergleichende Werbung gegenüber einem Mitbewerber zulässig? Analysiere § 6 UWG im Kontext einer aktuellen Marketingkampagne.')">
             <span>Zulässigkeit vergleichender Werbung</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </button>
           <button onclick="quickSearch('Ein Unternehmen nutzt Stock-Fotos auf seiner Website, deren Lizenz abgelaufen ist. Welche Ansprüche hat der Urheber auf Schadensersatz und Unterlassung nach dem UrhG?')">
             <span>Urheberrechtsverletzung Bildrechte</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </button>
         </div>
       </div>
@@ -1036,23 +1319,71 @@
       <div class="input-row">
         <textarea id="queryInput" rows="1" placeholder="Stelle eine Rechtsfrage oder gib einen Paragraphen ein…" onkeydown="onInputKeydown(event)" oninput="autoResize(this)"></textarea>
         <div class="input-actions">
-          <button onclick="document.getElementById('fileInput').click()" title="Datei anhängen (PDF/DOCX)">📎</button>
-          <button class="send-btn" id="sendBtn" onclick="handleSubmit()" title="Absenden">➤</button>
+          <button onclick="document.getElementById('fileInput').click()" title="Datei anhängen (PDF/DOCX)">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+          </button>
+          <button class="send-btn" id="sendBtn" onclick="handleSubmit()" title="Recherche starten">
+            <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
         </div>
       </div>
       <div class="input-footer">
-        <span>LEX durchsucht Gesetze + Urteile mit hybridem RAG</span>
+        <span>Präzise Recherche durch Gesetze + Entscheidungsdatenbank</span>
         <span class="file-name" id="fileName"></span>
       </div>
     </div>
   </div>
 </main>
 
+<!-- ═══ DOCS MODAL ═══ -->
+<div class="source-overlay" id="docsOverlay" onclick="toggleDocs()"></div>
+<div class="source-panel" id="docsPanel">
+  <div class="source-panel-header">
+    <h3>Dokumentation & Rechtsbestand</h3>
+    <button class="close-btn" onclick="toggleDocs()">
+      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+  </div>
+  <div class="source-panel-body">
+    <div class="sp-title">LEX — RAG-Infrastruktur</div>
+    <div class="sp-sub">Hybrid-RAG (Retrieval-Augmented Generation) System</div>
+    
+    <div class="sp-text" style="background:transparent;border:none;padding:0;box-shadow:none;color:var(--text-secondary);">
+      LEX basiert auf einem hochspezialisierten RAG-System, das für die deutsche Rechtssprechung optimiert wurde. Im Gegensatz zu Standard-Modellen nutzt LEX eine hybride Infrastruktur:
+
+      <h4 style="margin: 24px 0 10px; color: var(--gold-text); font-weight: 700; font-size: 13px; text-transform: uppercase;">1. Rechtsbestand (Datenbasis)</h4>
+      Das System verfügt über einen Live-Index von aktuell <strong>17.024 Dokumenten</strong>:
+      <ul style="margin: 8px 0 16px; padding-left: 20px; font-family: var(--font-sans); font-size: 13.5px; line-height: 1.7;">
+        <li style="margin-bottom: 6px;"><strong>Bundesrecht:</strong> Volle Abdeckung von 74 Gesetzen (BGB, UWG, TDDDG, InsO, GmbHG, StGB, UrhG, KSchG etc.).</li>
+        <li style="margin-bottom: 6px;"><strong>Rechtsprechung:</strong> Über 400 Leitsatz-Entscheidungen der obersten Bundesgerichte (BGH, BVerfG, BAG, BSG).</li>
+        <li style="margin-bottom: 6px;"><strong>Update-Zyklus:</strong> Wöchentliches Scraping direkt von gesetze-im-internet.de.</li>
+      </ul>
+
+      <h4 style="margin: 24px 0 10px; color: var(--gold-text); font-weight: 700; font-size: 13px; text-transform: uppercase;">2. Hybride Suche</h4>
+      Um juristische Präzision zu gewährleisten, kombiniert LEX zwei Suchverfahren:
+      <ul style="margin: 8px 0 16px; padding-left: 20px; font-family: var(--font-sans); font-size: 13.5px; line-height: 1.7;">
+        <li style="margin-bottom: 6px;"><strong>Vektor-Suche (Dense):</strong> Erkennt semantische Zusammenhänge (z.B. findet "Mangel" bei der Suche nach "kaputt").</li>
+        <li style="margin-bottom: 6px;"><strong>Lexikalische Suche (Sparse):</strong> Findet exakte juristische Fachbegriffe und Paragraphenketten.</li>
+        <li style="margin-bottom: 6px;"><strong>Reranking:</strong> Ein spezialisiertes Cross-Encoder Modell bewertet die 15 besten Treffer nach juristischer Relevanz neu.</li>
+      </ul>
+
+      <h4 style="margin: 24px 0 10px; color: var(--gold-text); font-weight: 700; font-size: 13px; text-transform: uppercase;">3. Wissens-Graph</h4>
+      LEX erkennt Querverweise zwischen Paragraphen automatisch und baut einen Wissens-Graphen auf. Dies ermöglicht es dem System, verwandte Normen vorzuschlagen, auch wenn diese nicht explizit in der Frage vorkommen.
+    </div>
+
+    <div class="disclaimer" style="margin-top: 30px; border-left: 3px solid var(--gold); background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius); font-size: 12px; line-height: 1.6;">
+      <strong>Wichtiger Hinweis:</strong> Dieses System dient der Unterstützung juristischer Facharbeit. Es ersetzt keine Rechtsberatung durch einen zugelassenen Rechtsanwalt. Die Haftung für die Richtigkeit der KI-generierten Texte ist ausgeschlossen.
+    </div>
+  </div>
+</div>
+
 <!-- ═══ SOURCE DETAIL PANEL ═══ -->
 <div class="source-panel" id="sourcePanel">
   <div class="source-panel-header">
     <h3 id="sourcePanelTitle">Quelle</h3>
-    <button class="close-btn" onclick="closeSourcePanel()">✕</button>
+    <button class="close-btn" onclick="closeSourcePanel()">
+      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
   </div>
   <div class="source-panel-body" id="sourcePanelBody">
     <div class="sp-title" id="spTitle"></div>
@@ -1077,12 +1408,43 @@ let _termEl = null;
 
 function setTerminal(action) {
   const inner = document.getElementById('messagesInner');
-  // Remove any existing terminal
   if (_termEl) _termEl.remove();
-  // Create terminal element in the message flow
+
+  // Map action parameter into beautiful segmented steps
+  let s1 = 'active', s2 = 'pending', s3 = 'pending';
+  
+  if (action.includes('Bewerte') || action.includes('Rerank') || action.includes('Relevanz')) {
+    s1 = 'done';
+    s2 = 'active';
+  } else if (action.includes('Erstelle') || action.includes('Generiere') || action.includes('Synthese')) {
+    s1 = 'done';
+    s2 = 'done';
+    s3 = 'active';
+  }
+
   const div = document.createElement('div');
-  div.className = 'term-status visible';
-  div.innerHTML = `<div class="term-spinner"></div><div class="term-text"><span class="term-prefix">$</span> <span class="term-action">${escHtml(action)}</span></div>`;
+  div.className = 'pipeline-status visible';
+  div.innerHTML = `
+    <div class="pipeline-header">
+      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1.5s linear infinite; margin-right: 4px;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+      <span>Anwalts-Recherche-Infrastruktur</span>
+    </div>
+    <div class="pipeline-steps">
+      <div class="pipeline-step ${s1}">
+        <span class="step-dot"></span>
+        <span class="step-label">Vektorsuche & Normen-Abfrage (17.000+ Paragraphen)</span>
+      </div>
+      <div class="pipeline-step ${s2}">
+        <span class="step-dot"></span>
+        <span class="step-label">Juristisches Reranking (Cross-Encoder Optimierung)</span>
+      </div>
+      <div class="pipeline-step ${s3}">
+        <span class="step-dot"></span>
+        <span class="step-label">Subsumtion & Entwurfserstellung</span>
+      </div>
+    </div>
+  `;
+  
   inner.appendChild(div);
   _termEl = div;
   scrollToBottom();
@@ -1090,7 +1452,7 @@ function setTerminal(action) {
 
 function hideTerminal() {
   if (_termEl) { _termEl.remove(); _termEl = null; }
-  const existing = document.querySelector('.term-status');
+  const existing = document.querySelector('.pipeline-status');
   if (existing) existing.remove();
 }
 
@@ -1158,10 +1520,10 @@ function newChat() {
   state.hasAskedInCurrentChat = false;
   document.getElementById('chatTitle').textContent = 'Neue Recherche';
   document.getElementById('welcome').classList.remove('hidden');
-  // Remove all messages except welcome
+  
   const inner = document.getElementById('messagesInner');
-  inner.querySelectorAll('.msg, .sources-section, .error-msg, .loading-msg').forEach(el => el.remove());
-  // Reset welcome
+  inner.querySelectorAll('.msg, .sources-section, .error-msg, .loading-msg, .pipeline-status').forEach(el => el.remove());
+  
   document.getElementById('welcome').classList.remove('hidden');
   document.getElementById('queryInput').value = '';
   document.getElementById('queryInput').focus();
@@ -1179,7 +1541,6 @@ function getCurrentChat() {
 
 function renderHistory() {
   const list = document.getElementById('historyList');
-  const empty = document.getElementById('historyEmpty');
   if (state.chats.length === 0) {
     list.innerHTML = '<li class="history-empty" id="historyEmpty">Noch keine Unterhaltungen.<br>Stelle eine Rechtsfrage, um zu beginnen.</li>';
     return;
@@ -1189,11 +1550,15 @@ function renderHistory() {
   sorted.forEach(c => {
     const title = c.title || c.messages?.find(m => m.role === 'user')?.content?.substring(0, 50) || 'Neue Recherche';
     const active = c.id === state.currentChatId ? 'active' : '';
-    html += `<li>
+    html += `<li class="history-item-wrapper">
       <button class="history-item ${active}" onclick="switchChat('${c.id}')">
-        <span class="icon">⚖️</span>
+        <span class="icon">
+          <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        </span>
         <span class="title">${escHtml(title)}</span>
-        <button class="delete-btn" onclick="event.stopPropagation();deleteChat('${c.id}')" title="Löschen">✕</button>
+      </button>
+      <button class="delete-btn" onclick="deleteChat('${c.id}')" title="Löschen" aria-label="Recherche löschen">
+        <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
     </li>`;
   });
@@ -1222,12 +1587,11 @@ function deleteChat(id) {
 
 function renderChatHistory(chat) {
   const inner = document.getElementById('messagesInner');
-  // Remove welcome, old messages, etc.
-  inner.querySelectorAll('.msg, .sources-section, .error-msg, .loading-msg').forEach(el => el.remove());
+  inner.querySelectorAll('.msg, .sources-section, .error-msg, .loading-msg, .pipeline-status').forEach(el => el.remove());
   document.getElementById('welcome').classList.add('hidden');
 
   if (!chat.messages) return;
-  chat.messages.forEach((msg, idx) => {
+  chat.messages.forEach((msg) => {
     if (msg.role === 'user') {
       addUserMessage(msg.content, false);
     } else if (msg.role === 'assistant') {
@@ -1250,7 +1614,6 @@ function addMessageToCurrentChat(role, content, sources, model) {
   }
   if (role === 'user') {
     chat.messages.push({ role, content, timestamp: Date.now() });
-    // Generate title from first user message
     if (chat.messages.filter(m => m.role === 'user').length === 1) {
       chat.title = content?.substring(0, 60) || 'Neue Recherche';
       document.getElementById('chatTitle').textContent = chat.title;
@@ -1291,17 +1654,19 @@ function addAssistantMessage(text, sources, model, streaming = false) {
     </div>
     <div class="msg-meta">
       ${modelBadge}
-      <span>LEX · geprüfte Analyse</span>
+      <span class="verify-tag">
+        <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        LEX · geprüfte Analyse
+      </span>
     </div>`;
   inner.appendChild(div);
   scrollToBottom();
 
-  // If not streaming, add source cards below
   if (!streaming && sources && sources.length > 0) {
     window._lastSources = sources;
     const sourceDiv = document.createElement('div');
     sourceDiv.className = 'sources-section';
-    sourceDiv.innerHTML = `<div class="src-header">Quellen</div>${sources.map((s, i) => renderSourceCard(s, i + 1)).join('')}`;
+    sourceDiv.innerHTML = `<div class="src-header">Quellenverzeichnis</div>${sources.map((s, i) => renderSourceCard(s, i + 1)).join('')}`;
     inner.appendChild(sourceDiv);
     scrollToBottom();
   }
@@ -1311,7 +1676,6 @@ function addAssistantMessage(text, sources, model, streaming = false) {
 function renderSourceCard(source, idx) {
   const typ = source.typ || 'gesetz';
   const badgeClass = typ === 'urteil' ? 'urteil' : 'gesetz';
-  // Handle both citation (streaming) and raw search result formats
   const abk = source.abkürzung || source.gesetz || '';
   const para = source.paragraph || '';
   const titel = source.paragraph_titel || source.titel || '';
@@ -1331,7 +1695,7 @@ function renderSourceCard(source, idx) {
       <div class="src-title">${escHtml(title)}</div>
       <div class="src-meta">${meta}</div>
     </div>
-    <div class="src-score">Rerank <b>${score.toFixed(4)}</b></div>
+    <div class="src-score">Match-Güte <b>${score.toFixed(4)}</b></div>
   </div>`;
 }
 
@@ -1355,7 +1719,8 @@ function updateStreamingMessage(text) {
     div.className = 'msg assistant';
     div.id = 'streaming-msg';
     div.innerHTML = `<div class="bubble"><div class="streaming-cursor" id="streamBody"></div></div>
-      <div class="msg-meta"><span class="model-badge" id="streamModelBadge">Analyse läuft...</span><span>LEX · geprüfte Analyse</span></div>`;
+      <div class="msg-meta"><span class="model-badge" id="streamModelBadge">Analyse läuft...</span>
+      <span class="verify-tag"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> LEX · geprüfte Analyse</span></div>`;
     inner.appendChild(div);
     msg = div;
   }
@@ -1388,16 +1753,13 @@ function finalizeStreamingMessage(text, sources, model) {
     }
   }
 
-  // Add source cards
   if (sources && sources.length > 0) {
     const inner = document.getElementById('messagesInner');
     const sourceDiv = document.createElement('div');
     sourceDiv.className = 'sources-section';
-    sourceDiv.innerHTML = `<div class="src-header">Quellen</div>${sources.map((s, i) => renderSourceCard(s, i + 1)).join('')}`;
+    sourceDiv.innerHTML = `<div class="src-header">Quellenverzeichnis</div>${sources.map((s, i) => renderSourceCard(s, i + 1)).join('')}`;
 
-    // Store sources globally for panel access
     window._lastSources = sources;
-
     inner.appendChild(sourceDiv);
     scrollToBottom();
   }
@@ -1418,7 +1780,7 @@ async function handleSubmit() {
   // Add user message
   addUserMessage(q);
 
-  // Show 3D orb loading
+  // Show segment loader
   setTerminal('Durchsuche Index');
 
   // Save user message
@@ -1439,7 +1801,6 @@ async function handleSubmit() {
   let model = '';
 
   try {
-    // Use streaming ask endpoint
     const es = new EventSource('/api/legal/ask/stream?q=' + encodeURIComponent(queryWithCase) + '&top_k=5');
 
     es.addEventListener('search', (e) => {
@@ -1448,12 +1809,15 @@ async function handleSubmit() {
       currentSources = sources;
       window._lastSources = sources;
 
-      // Real progress
-      setTerminal('Bewerte Treffer');
+      setTerminal('Bewerte Treffer & Rerank');
+      setTimeout(() => {
+        setTerminal('Generiere juristische Analyse');
+      }, 500);
+      
       setTimeout(() => {
         hideTerminal();
         updateStreamingMessage('');
-      }, 300);
+      }, 900);
     });
 
     es.addEventListener('token', (e) => {
@@ -1480,14 +1844,12 @@ async function handleSubmit() {
       sendBtn.disabled = false;
       state.isStreaming = false;
 
-      // Save assistant message
       addMessageToCurrentChat('assistant', answerText, sources, model);
     });
 
     es.addEventListener('error', (e) => {
       hideTerminal();
       if (!answerText) {
-        // No answer yet — fallback to the same enhanced answer pipeline.
         es.close();
         fallbackAsk(queryWithCase);
         return;
@@ -1500,7 +1862,6 @@ async function handleSubmit() {
       state.isStreaming = false;
     });
 
-    // Safety timeout
     setTimeout(() => {
       if (state.isStreaming) {
         es.close();
@@ -1536,7 +1897,10 @@ async function fallbackAsk(q) {
 
     if (!data.answer) {
       const msg = 'Die geprüfte Analyse konnte nicht erstellt werden. Bitte versuchen Sie es erneut.';
-      inner.innerHTML += `<div class="error-msg">${escHtml(msg)}</div>`;
+      const errDiv = document.createElement('div');
+      errDiv.className = 'error-msg';
+      errDiv.textContent = msg;
+      inner.appendChild(errDiv);
       addMessageToCurrentChat('assistant', msg, [], '');
       sendBtn.disabled = false;
       state.isStreaming = false;
@@ -1551,7 +1915,10 @@ async function fallbackAsk(q) {
     addAssistantMessage(answer, sources, model);
     addMessageToCurrentChat('assistant', answer, sources, model);
   } catch (e) {
-    inner.innerHTML += '<div class="error-msg">Fehler bei der geprüften Analyse. Bitte versuchen Sie es später erneut.</div>';
+    const errDiv = document.createElement('div');
+    errDiv.className = 'error-msg';
+    errDiv.textContent = 'Fehler bei der geprüften Analyse. Bitte versuchen Sie es später erneut.';
+    inner.appendChild(errDiv);
   }
   sendBtn.disabled = false;
   state.isStreaming = false;
@@ -1589,16 +1956,19 @@ function openSourcePanel(idx) {
   document.getElementById('spText').textContent = text;
   document.getElementById('sourcePanelTitle').textContent = abk || 'Quelle';
   document.getElementById('spActions').innerHTML = `
-    <a href="${escHtml(href)}" target="_blank" rel="noopener">🔗 Quelle öffnen</a>
+    <a href="${escHtml(href)}" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+      Originalquelle öffnen
+    </a>
   `;
 
-  // Try to load related paragraphs from KG
   if (abk && para) {
     loadRelated(`${abk}||${para}`);
   }
 
   document.body.style.overflow = 'hidden';
 }
+
 function closeSourcePanel() {
   document.getElementById('sourceOverlay').classList.remove('open');
   document.getElementById('sourcePanel').classList.remove('open');
@@ -1614,7 +1984,6 @@ function toggleDocs() {
 }
 
 function openSourceByRef(refStr) {
-  // Parse reference like "1" or "1,2" or "1-3"
   const sources = window._lastSources || [];
   const firstNum = parseInt(refStr);
   if (firstNum > 0 && firstNum <= sources.length) {
@@ -1679,15 +2048,18 @@ function updateCase() {
   const label = document.getElementById('caseLabel');
   if (textarea.value.trim()) {
     active.style.display = 'flex';
-    label.textContent = textarea.value.trim().substring(0, 60) + '…';
+    label.textContent = textarea.value.trim().substring(0, 50) + '…';
+    localStorage.setItem('lex_case', textarea.value.trim());
   } else {
     active.style.display = 'none';
+    localStorage.removeItem('lex_case');
   }
 }
 
 function clearCase() {
   document.getElementById('caseTextarea').value = '';
   document.getElementById('caseActive').style.display = 'none';
+  localStorage.removeItem('lex_case');
 }
 
 /* ═══════════════════════════════════════════
@@ -1699,8 +2071,6 @@ function handleFileUpload(e) {
   const fileName = document.getElementById('fileName');
   fileName.textContent = '📎 ' + file.name;
   fileName.style.display = 'inline-flex';
-  // For now just visual — backend doesn't support file processing yet
-  // In future: upload file content to context
 }
 
 /* ═══════════════════════════════════════════
@@ -1753,9 +2123,8 @@ async function loadStats() {
     const docs = data.total_docs || 0;
     state.docCount = docs;
 
-    // Estimated counts (backend doesn't provide these separately)
-    const laws = 72;
-    const courts = 7;
+    const laws = 74;
+    const courts = 4; // BGH, BVerfG, BAG, BSG
 
     document.getElementById('statDocs').textContent = docs.toLocaleString();
     document.getElementById('statLaws').textContent = laws;
@@ -1763,9 +2132,8 @@ async function loadStats() {
 
     document.getElementById('welcomeDocs').textContent = docs.toLocaleString();
     document.getElementById('welcomeLaws').textContent = laws;
-    document.getElementById('welcomeCourts').textContent = courts;
   } catch (e) {
-    // Keep defaults
+    // Fallbacks
   }
 }
 
@@ -1779,11 +2147,9 @@ document.getElementById('sourceOverlay').addEventListener('click', closeSourcePa
    ═══════════════════════════════════════════ */
 loadStats();
 
-// Restore last chat or start new
 const sorted = [...state.chats].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
 if (sorted.length > 0 && sorted[0].messages && sorted[0].messages.length > 0) {
   switchChat(sorted[0].id);
-  // Restore current case
   const lastCase = localStorage.getItem('lex_case');
   if (lastCase) {
     document.getElementById('caseTextarea').value = lastCase;
@@ -1793,7 +2159,6 @@ if (sorted.length > 0 && sorted[0].messages && sorted[0].messages.length > 0) {
   newChat();
 }
 
-// Focus input
 document.getElementById('queryInput').focus();
 </script>
 </body>

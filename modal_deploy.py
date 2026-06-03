@@ -784,6 +784,20 @@ async def index():
     return CHAT_HTML
 
 
+@web_app.get("/Logo_LX.png")
+async def logo_lx():
+    from fastapi.responses import FileResponse
+    candidates = [
+        Path(__file__).parent / "src" / "static" / "Logo_LX.png",
+        Path("/src/static/Logo_LX.png"),
+        Path(__file__).parent / "static" / "Logo_LX.png",
+    ]
+    for p in candidates:
+        if p.exists():
+            return FileResponse(p)
+    return HTMLResponse(status_code=404)
+
+
 # ---------------------------------------------------------------------------
 # Weekly scrape runs locally via launchd (Modal IPs blocked by gesetze-im-internet.de).
 # See: scripts/weekly_scrape.sh + scripts/com.legal-rag.weekly-scrape.plist
