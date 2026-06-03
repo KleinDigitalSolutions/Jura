@@ -61,6 +61,9 @@ def test_answer_requirements_force_sentence_level_citations_for_termination_prof
     assert "Jeder einzelne Satz mit rechtlicher Aussage braucht eine eigene Quellen-ID" in requirements
     assert "Sonderkündigungsschutz nur nennen" in requirements
     assert "SGB IX § 168" in requirements
+    assert "kein gesetzlicher Kündigungsschutz nach dem KSchG" in requirements
+    assert "Machtbereich" in requirements
+    assert "nicht zwingend persönliche Übergabe" in requirements
 
 
 def test_apply_legal_quality_injects_required_sources_and_filters_false_positive():

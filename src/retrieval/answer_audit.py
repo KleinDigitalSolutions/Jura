@@ -223,6 +223,54 @@ def _profile_deadline_issue(answer: str, plan_data: dict[str, Any]) -> str:
     return ""
 
 
+def _profile_precision_issues(answer: str, plan_data: dict[str, Any]) -> list[ClaimIssue]:
+    """Flag profile-specific legal precision risks that citations alone cannot catch."""
+    profiles = plan_data.get("profiles") or []
+    if "arbeitsrecht_ordentliche_kuendigung_arbeitnehmer" not in profiles:
+        return []
+
+    issues: list[ClaimIssue] = []
+    answer_l = (answer or "").lower()
+
+    if re.search(r"(bis zu|höchstens)\s+zehn\s+arbeitnehmer", answer_l):
+        has_clear_no_kschg = re.search(
+            r"(kschg|kündigungsschutzgesetz)[^.]{0,120}(gilt\s+nicht|keinen?\s+gesetzlichen\s+kündigungsschutz|nicht\s+anwendbar)|"
+            r"(gilt\s+nicht|keinen?\s+gesetzlichen\s+kündigungsschutz|nicht\s+anwendbar)[^.]{0,120}(kschg|kündigungsschutzgesetz)",
+            answer_l,
+        )
+        risky_limited_wording = re.search(r"(nur\s+eingeschränkt|eingeschränkt)", answer_l)
+        if risky_limited_wording and not has_clear_no_kschg:
+            issues.append(
+                ClaimIssue(
+                    issue="imprecise_kleinbetrieb_kschg",
+                    severity="high",
+                    claim="Kleinbetrieb / § 23 KSchG",
+                    detail=(
+                        "Kleinbetriebe dürfen nicht als bloß eingeschränkter KSchG-Schutz dargestellt werden; "
+                        "wenn die Schwelle nicht greift, besteht grundsätzlich kein gesetzlicher Kündigungsschutz nach dem KSchG."
+                    ),
+                )
+            )
+
+    has_access_topic = "zugang" in answer_l or "zugeht" in answer_l or "geht" in answer_l
+    mentions_machtbereich = re.search(r"machtbereich|empfangsbereich|briefkasten|kenntnisnahme", answer_l)
+    narrows_to_receipt = re.search(r"(tatsächlich\s+erhält|persönlich\s+(erhält|entgegennimmt)|erklärung\s+erhält)", answer_l)
+    if has_access_topic and narrows_to_receipt and not mentions_machtbereich:
+        issues.append(
+            ClaimIssue(
+                issue="imprecise_zugang_bgb_130",
+                severity="high",
+                claim="Zugang / § 130 BGB",
+                detail=(
+                    "Zugang bei Abwesenden ist nicht erst persönliche Entgegennahme; maßgeblich ist Machtbereich "
+                    "plus gewöhnliche Möglichkeit der Kenntnisnahme."
+                ),
+            )
+        )
+
+    return issues
+
+
 def audit_answer_sources(
     answer: str,
     citations: list[dict[str, Any]],
@@ -360,6 +408,7 @@ def audit_answer_sources(
                 detail=deadline_detail,
             )
         )
+    issues.extend(_profile_precision_issues(answer, plan_data))
 
     high_count = sum(1 for issue in issues if issue.severity == "high")
     medium_count = sum(1 for issue in issues if issue.severity == "medium")

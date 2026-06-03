@@ -130,8 +130,9 @@ ISSUE_PROFILES: tuple[LegalIssueProfile, ...] = (
         allowed_laws=("BGB", "KSchG", "BetrVG", "SGB IX", "TzBfG", "MuSchG", "BEEG"),
         answer_focus=(
             "Schriftform und Zugang prüfen",
+            "Zugang nach § 130 BGB präzise als Machtbereich plus gewöhnliche Kenntnisnahmemöglichkeit erklären; nicht auf persönliche Entgegennahme verengen",
             "gesetzliche, vertragliche und tarifliche Kündigungsfrist trennen",
-            "KSchG-Anwendbarkeit und Kündigungsgrund prüfen",
+            "KSchG-Anwendbarkeit und Kündigungsgrund prüfen; Kleinbetrieb klar als kein gesetzlicher Kündigungsschutz nach KSchG darstellen, vorbehaltlich Alt-Arbeitnehmern und Mindestschutz",
             "Betriebsratsanhörung und Sonderkündigungsschutz als Wirksamkeitsrisiken nennen",
             "Kündigungsschutzklagefrist ausdrücklich hervorheben",
         ),
@@ -395,6 +396,8 @@ def build_answer_requirements(plan_data: Optional[dict[str, Any]], audit_data: O
             lines.append("- Mögliche Sonderregeln gesondert als kontextabhängig markieren: " + ", ".join(recommended))
         if "arbeitsrecht_ordentliche_kuendigung_arbeitnehmer" in profiles:
             lines.append("- Sonderkündigungsschutz nur nennen, wenn eine passende Quelle im Kontext zitiert wird; insbesondere Schwerbehinderung nur mit SGB IX § 168-Kontext.")
+            lines.append("- Kleinbetrieb präzise formulieren: Wenn die Schwelle des § 23 KSchG nicht greift, besteht kein gesetzlicher Kündigungsschutz nach dem KSchG; nur Alt-Arbeitnehmer/Sonderfälle und allgemeiner Mindestschutz bleiben möglich.")
+            lines.append("- Zugang präzise formulieren: § 130 BGB meint Zugang im Machtbereich mit gewöhnlicher Möglichkeit der Kenntnisnahme, nicht zwingend persönliche Übergabe oder tatsächliches Lesen.")
     focus = plan_data.get("answer_focus") or []
     for item in focus:
         lines.append(f"- {item}")

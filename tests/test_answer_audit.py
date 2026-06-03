@@ -63,6 +63,68 @@ def test_answer_audit_flags_required_norm_omission_and_deadline():
     assert "missing_deadline" in issues
 
 
+def test_answer_audit_flags_imprecise_kleinbetrieb_wording():
+    citations = [
+        {"id": "[1]", "gesetz": "KSchG", "paragraph": "§ 23", "titel": "Geltungsbereich"},
+        {"id": "[2]", "gesetz": "KSchG", "paragraph": "§ 1", "titel": "Sozial ungerechtfertigte Kündigungen"},
+    ]
+    plan = {"profiles": ["arbeitsrecht_ordentliche_kuendigung_arbeitnehmer"]}
+    answer = (
+        "In kleineren Betrieben mit bis zu zehn Arbeitnehmern gilt das KSchG nur eingeschränkt [1]. "
+        "Ist das KSchG anwendbar, muss die Kündigung sozial gerechtfertigt sein [2]."
+    )
+
+    audit = audit_answer_sources(answer, citations, retrieval_plan=plan)
+
+    issues = {issue["issue"] for issue in audit["issues"]}
+    assert audit["status"] == "fail"
+    assert "imprecise_kleinbetrieb_kschg" in issues
+
+
+def test_answer_audit_accepts_precise_kleinbetrieb_wording():
+    citations = [
+        {"id": "[1]", "gesetz": "KSchG", "paragraph": "§ 23", "titel": "Geltungsbereich"},
+    ]
+    plan = {"profiles": ["arbeitsrecht_ordentliche_kuendigung_arbeitnehmer"]}
+    answer = (
+        "Wenn die Schwelle des § 23 KSchG nicht greift, besteht grundsätzlich "
+        "kein gesetzlicher Kündigungsschutz nach dem KSchG [1]."
+    )
+
+    audit = audit_answer_sources(answer, citations, retrieval_plan=plan)
+
+    assert audit["status"] == "pass"
+
+
+def test_answer_audit_flags_zugang_as_personal_receipt_only():
+    citations = [
+        {"id": "[1]", "gesetz": "BGB", "paragraph": "§ 130", "titel": "Wirksamwerden der Willenserklärung"},
+    ]
+    plan = {"profiles": ["arbeitsrecht_ordentliche_kuendigung_arbeitnehmer"]}
+    answer = "Die Kündigung geht zu, wenn der Arbeitnehmer die Erklärung tatsächlich erhält [1]."
+
+    audit = audit_answer_sources(answer, citations, retrieval_plan=plan)
+
+    issues = {issue["issue"] for issue in audit["issues"]}
+    assert audit["status"] == "fail"
+    assert "imprecise_zugang_bgb_130" in issues
+
+
+def test_answer_audit_accepts_precise_zugang_wording():
+    citations = [
+        {"id": "[1]", "gesetz": "BGB", "paragraph": "§ 130", "titel": "Wirksamwerden der Willenserklärung"},
+    ]
+    plan = {"profiles": ["arbeitsrecht_ordentliche_kuendigung_arbeitnehmer"]}
+    answer = (
+        "Die Kündigung geht zu, wenn sie in den Machtbereich des Arbeitnehmers gelangt "
+        "und unter gewöhnlichen Umständen mit Kenntnisnahme zu rechnen ist [1]."
+    )
+
+    audit = audit_answer_sources(answer, citations, retrieval_plan=plan)
+
+    assert audit["status"] == "pass"
+
+
 def test_answer_audit_respects_required_norms_missing_from_retrieval():
     citations = [
         {"id": "[1]", "gesetz": "BGB", "paragraph": "§ 623", "titel": "Schriftform"},
