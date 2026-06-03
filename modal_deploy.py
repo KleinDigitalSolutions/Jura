@@ -16,6 +16,11 @@ import modal
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, StreamingResponse
 
+for import_root in (Path(__file__).parent, Path("/")):
+    import_root_str = str(import_root)
+    if import_root_str not in sys.path:
+        sys.path.insert(0, import_root_str)
+
 # ---------------------------------------------------------------------------
 # Modal app + image
 # ---------------------------------------------------------------------------
@@ -87,6 +92,9 @@ REGELN FÜR DEINE ANTWORT
 
 1. ZITIERE JEDE QUELLE mit ihrer [Nummer] aus dem Kontext.
    Keine Aussage ohne Quellenangabe.
+   Jeder Satz mit einer materiellen rechtlichen Aussage muss am Satzende
+   mindestens eine Quellen-ID wie [1] enthalten. Überschriften, Begrüßung
+   und rein organisatorische Hinweise sind davon ausgenommen.
 
 2. FALLS die Gesetzestexte die Frage nicht beantworten können,
    sage das ehrlich. Falls sie nur teilweise helfen, erkläre was fehlt.
@@ -211,11 +219,13 @@ class LegalRAG:
             try:
                 raw_answer, model = _call_llm_provider(p, user_prompt)
                 answer, warnings = _verify_citations(raw_answer, citations)
+                answer_audit = _audit_generated_answer(answer, citations)
                 return {
                     "answer": answer,
                     "citations": citations,
                     "model": model,
                     "citation_warnings": warnings,
+                    "answer_audit": answer_audit,
                 }
             except Exception as e:
                 last_error = f"{p}: {e}"
@@ -339,7 +349,8 @@ GESETZESTEXTE (Primärtreffer & struktureller Kontext):
 
 Analysiere die Frage präzise auf Basis der bereitgestellten Gesetzestexte. 
 Beachte dabei besonders die Zusammenhänge zwischen den Paragraphen.
-Zitiere jede Quelle mit ihrer [Nummer].
+Zitiere jede Quelle mit ihrer [Nummer]. Jeder Satz mit einer materiellen
+rechtlichen Aussage muss am Satzende mindestens eine Quellen-ID wie [1] enthalten.
 WICHTIG: Falls ein Gesetzestext mit "⚠️ ÄLTER ALS 2 JAHRE" markiert ist, 
 weise den Mandanten darauf hin, dass Änderungen möglich sind und der 
 aktuelle Stand geprüft werden muss."""
@@ -487,6 +498,47 @@ def _verify_citations(answer: str, citations: list[dict]) -> tuple[str, list[str
         answer = answer + warning_block
 
     return answer, warnings
+
+
+def _audit_generated_answer(
+    answer: str,
+    citations: list[dict],
+    retrieval_plan: Optional[dict] = None,
+    source_audit: Optional[dict] = None,
+) -> dict:
+    """Run deterministic source-level audit for generated legal answers."""
+    try:
+        try:
+            from src.retrieval.answer_audit import audit_answer_sources
+        except ModuleNotFoundError:
+            for import_root in (Path("/"), Path("/src"), Path(__file__).parent):
+                import_root_str = str(import_root)
+                if import_root_str not in sys.path:
+                    sys.path.insert(0, import_root_str)
+            try:
+                from src.retrieval.answer_audit import audit_answer_sources
+            except ModuleNotFoundError:
+                from retrieval.answer_audit import audit_answer_sources
+
+        return audit_answer_sources(
+            answer=answer,
+            citations=citations,
+            retrieval_plan=retrieval_plan,
+            source_audit=source_audit,
+        )
+    except Exception as e:
+        return {
+            "status": "error",
+            "score": 0,
+            "issue_count": 1,
+            "issues": [{
+                "issue": "answer_audit_failed",
+                "severity": "high",
+                "claim": "",
+                "detail": str(e),
+                "citation_ids": [],
+            }],
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -656,6 +708,12 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
 
             raw_answer = "".join(answer_parts)
             verified_answer, citation_warnings = _verify_citations(raw_answer, citations)
+            answer_audit = _audit_generated_answer(
+                verified_answer,
+                citations,
+                retrieval_plan=enhanced_result.get("retrieval_plan"),
+                source_audit=enhanced_result.get("source_audit"),
+            )
             if verified_answer != raw_answer:
                 extra = (
                     verified_answer[len(raw_answer):]
@@ -672,6 +730,7 @@ async def legal_ask_stream(q: str = "", top_k: int = 5):
                 "retrieval_method": enhanced_result.get("retrieval_method", "full_fallback"),
                 "retrieval_plan": enhanced_result.get("retrieval_plan"),
                 "source_audit": enhanced_result.get("source_audit"),
+                "answer_audit": answer_audit,
             }) + "\n\n"
 
         except Exception as e:
@@ -732,6 +791,12 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
 
     # Verify citations in answer (same guardrail as generate_answer)
     answer_text, citation_warnings = _verify_citations(answer_text, citations)
+    answer_audit = _audit_generated_answer(
+        answer_text,
+        citations,
+        retrieval_plan=enhanced_result.get("retrieval_plan"),
+        source_audit=enhanced_result.get("source_audit"),
+    )
 
     return {
         "answer": answer_text,
@@ -743,6 +808,7 @@ async def legal_ask_enhanced(q: str = "", top_k: int = 5):
         "source_audit": enhanced_result.get("source_audit"),
         "model": model_used,
         "citation_warnings": citation_warnings,
+        "answer_audit": answer_audit,
     }
 
 

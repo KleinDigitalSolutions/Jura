@@ -11,7 +11,7 @@
 [![Modal](https://img.shields.io/badge/Modal-GPU_Deployment-7C3AED?style=for-the-badge)](https://modal.com/)
 [![Qdrant](https://img.shields.io/badge/Qdrant-Hybrid_Search-DC244C?style=for-the-badge)](https://qdrant.tech/)
 [![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash_Lite-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
-[![Pytest](https://img.shields.io/badge/Tests-52_Passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
+[![Pytest](https://img.shields.io/badge/Tests-58_Passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
 
 </div>
 
@@ -21,7 +21,7 @@
 
 **Legal RAG** is a hybrid retrieval-augmented generation platform for German law. It indexes German federal statutes and selected court decisions, combines dense and sparse semantic search with cross-encoder reranking, and generates citation-grounded legal analyses through a deterministic quality layer.
 
-The goal is not a generic chatbot. The system is designed as a **law-firm research and first-analysis tool**: it classifies legal issues, retrieves mandatory legal sources, removes known false positives, and exposes auditable metadata such as `retrieval_plan` and `source_audit`.
+The goal is not a generic chatbot. The system is designed as a **law-firm research and first-analysis tool**: it classifies legal issues, retrieves mandatory legal sources, removes known false positives, and exposes auditable metadata such as `retrieval_plan`, `source_audit`, and post-generation `answer_audit`.
 
 Current live index:
 
@@ -77,6 +77,21 @@ Example: for ordinary employee termination, the system requires or recommends:
 - `SGB IX § 168` — disability-related approval requirement
 
 It filters unrelated or misleading sources such as `BGB § 580a`, `BetrVG § 103`, `SGB IX § 175`, and `TzBfG § 16` for that profile.
+
+### Source-Level Answer Auditing
+
+Post-generation answer auditing is implemented in `src/retrieval/answer_audit.py` and returned from the enhanced answer endpoints as `answer_audit`.
+
+The auditor is deterministic and dependency-free. It checks generated answers for:
+
+- material legal claims without a source citation
+- citation IDs that were not provided to the model
+- paragraph or law references that do not match the cited sources
+- required norms from the retrieval plan that are missing in the answer
+- profile-specific deadline omissions, such as the KSchG § 4 three-week claim deadline
+- overconfident wording such as "immer", "garantiert", or "zweifelsfrei"
+
+The API returns an audit status (`pass`, `warn`, `fail`, or `error`), score, issue counts, and structured issue details. Prompt wording still asks the model to cite every material legal sentence, but the auditor is the enforcement layer.
 
 ### LEX Chat Interface
 
@@ -146,7 +161,7 @@ gesetze-im-internet.de          rechtsprechung-im-internet.de
 | `GET /api/legal/search` | Raw hybrid retrieval |
 | `GET /api/legal/ask` | Search + generated answer |
 | `GET /api/legal/ask/stream` | Streaming legal analysis |
-| `GET /api/legal/ask/enhanced` | Enhanced retrieval + quality audit + generated answer |
+| `GET /api/legal/ask/enhanced` | Enhanced retrieval + source/answer audits + generated answer |
 | `GET /api/legal/related/{doc_id}` | Knowledge-graph related paragraphs |
 | `GET /api/legal/stats` | Index statistics |
 
@@ -173,6 +188,7 @@ curl --get "https://aliundmaggy--legal-rag-fastapi-app.modal.run/api/legal/ask/e
 │   ├── ingestion/rag_pipeline.py   # embeddings, Qdrant, fusion, reranking
 │   ├── retrieval/
 │   │   ├── enhanced_search.py      # classify -> rewrite -> RRF -> quality layer
+│   │   ├── answer_audit.py         # post-generation source-level answer audit
 │   │   ├── legal_quality.py        # deterministic source profiles and audits
 │   │   ├── query_classifier.py
 │   │   └── query_rewriter.py
@@ -180,6 +196,7 @@ curl --get "https://aliundmaggy--legal-rag-fastapi-app.modal.run/api/legal/ask/e
 │   └── static/demo_ui.html
 ├── tests/
 │   ├── test_legal_quality.py
+│   ├── test_answer_audit.py
 │   ├── test_demo_ui.py
 │   └── test_retrieval_quality.py
 ├── scripts/
@@ -271,13 +288,14 @@ python -m pytest tests/test_retrieval_quality.py -v -s
 Current fast suite:
 
 ```text
-52 passed, 3 skipped
+58 passed, 3 skipped
 ```
 
 Quality checks include:
 
 - KG expansion regressions
 - legal source filtering
+- post-generation answer grounding audit
 - mandatory-source injection
 - UI routing guards against raw-search fallback
 - retrieval quality evaluation across legal domains

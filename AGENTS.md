@@ -9,6 +9,7 @@ This repository is a Python Legal RAG system for German law-firm research workfl
 - `src/ingestion/`: Qdrant indexing, bge-m3 embeddings, dense/sparse fusion, reranking, and legal graph creation.
 - `src/retrieval/`: query classification, rewriting, enhanced search, and deterministic legal quality controls.
 - `src/retrieval/legal_quality.py`: source profiles, mandatory-source injection, false-positive filtering, `retrieval_plan`, and `source_audit`.
+- `src/retrieval/answer_audit.py`: post-generation source-level auditing for material claims, missing citations, required norms, deadlines, and overconfident wording.
 - `src/static/demo_ui.html`: Modal-served LEX chat UI.
 - `tests/`: pytest coverage for ingestion, retrieval, quality gates, and UI routing regressions.
 
@@ -53,10 +54,11 @@ Run tests:
 ```bash
 python -m pytest -q
 python -m pytest tests/test_legal_quality.py -q
+python -m pytest tests/test_answer_audit.py -q
 python -m pytest tests/test_retrieval_quality.py -v -s
 ```
 
-Latest fast-suite baseline: `52 passed, 3 skipped`.
+Latest fast-suite baseline: `58 passed, 3 skipped`.
 
 ## Coding Style & Naming Conventions
 
@@ -85,6 +87,14 @@ Every profile change needs regression tests proving:
 - `missing_required` behaves correctly when a source is absent
 
 The UI must never fall back from chat to raw `/api/legal/search` output. Chat fallback must use `/api/legal/ask/enhanced`.
+
+Generated legal answers must return `answer_audit` from the enhanced and streaming answer paths. Prompt wording can require citations, but correctness must be enforced post-generation in `src/retrieval/answer_audit.py`. Every answer-audit change needs regression tests proving:
+
+- material legal claims without citations are flagged
+- cited paragraphs or law abbreviations must match the cited source context
+- required norms from `retrieval_plan.required_norms` are visible in the answer unless `source_audit.missing_required` says the source was unavailable
+- profile-specific deadlines are flagged when omitted
+- structural headings and greeting text are not treated as material claims
 
 ## Commit & Pull Request Guidelines
 
@@ -122,8 +132,8 @@ Priority work for making the product maximally useful and defensible for Kanzlei
 4. **Separate Statute And Case-Law Retrieval**
    Retrieve statutes and decisions in separate channels, then fuse after validation. Answers should distinguish binding statutes, case-law support, and contextual commentary.
 
-5. **Add Source-Level Answer Auditing**
-   Add a post-generation verifier that checks every material claim against the provided context and flags unsupported claims, missing deadlines, missing required norms, and overconfident language.
+5. **Expand Source-Level Answer Auditing**
+   Baseline post-generation verification exists in `src/retrieval/answer_audit.py`. Next steps: expose the status in the UI, add blocking behavior for `fail`, and broaden profile-specific deadline and required-claim checks.
 
 6. **Broaden Legal Data Coverage**
    Evaluate Open Legal Data, additional BGH/BAG/BVerfG coverage, and official APIs where license-compatible. Track source provenance and update dates per document.
