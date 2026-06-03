@@ -11,7 +11,7 @@
 [![Modal](https://img.shields.io/badge/Modal-GPU_Deployment-7C3AED?style=for-the-badge)](https://modal.com/)
 [![Qdrant](https://img.shields.io/badge/Qdrant-Hybrid_Search-DC244C?style=for-the-badge)](https://qdrant.tech/)
 [![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash_Lite-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
-[![Pytest](https://img.shields.io/badge/Tests-58_Passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
+[![Pytest](https://img.shields.io/badge/Tests-65_Passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
 
 </div>
 
@@ -92,6 +92,24 @@ The auditor is deterministic and dependency-free. It checks generated answers fo
 - overconfident wording such as "immer", "garantiert", or "zweifelsfrei"
 
 The API returns an audit status (`pass`, `warn`, `fail`, or `error`), score, issue counts, and structured issue details. Prompt wording still asks the model to cite every material legal sentence, but the auditor is the enforcement layer.
+
+### Kanzlei Eval Set
+
+The first law-firm regression set lives in `evals/kanzlei_core.json`. It intentionally does **not** hardcode answers. Each case defines a quality contract:
+
+- `must_include`: legal norms that must appear in the cited sources
+- `must_not_include`: misleading or cross-domain norms that must not enter the answer context
+- `expected_profiles`: deterministic retrieval profiles that should fire
+- `max_high_audit_issues`: tolerated high-severity answer-audit issues
+- `group`: `regression_guard` blocks regressions; `known_gap` tracks open product gaps without failing the gate
+
+Run the eval gate against the enhanced answer API:
+
+```bash
+python scripts/run_kanzlei_eval.py --eval-set evals/kanzlei_core.json --skip-known-gaps
+```
+
+This preserves the universal adviser pipeline: new facts still run through retrieval, quality profiles, generation, and answer auditing. The eval set only checks whether representative workflows keep their minimum source and audit guarantees.
 
 ### LEX Chat Interface
 
@@ -182,6 +200,8 @@ curl --get "https://aliundmaggy--legal-rag-fastapi-app.modal.run/api/legal/ask/e
 ├── main.py                         # CLI entry point
 ├── modal_deploy.py                 # Modal FastAPI deployment + LEX persona
 ├── rebuild_clean.py                # index cleanup and rebuild logic
+├── evals/
+│   └── kanzlei_core.json           # source/audit regression contracts
 ├── src/
 │   ├── scrapers/                   # German laws, rulings, EUR-Lex scaffold
 │   ├── processors/                 # cleaning, metadata, chunking
@@ -191,12 +211,14 @@ curl --get "https://aliundmaggy--legal-rag-fastapi-app.modal.run/api/legal/ask/e
 │   │   ├── answer_audit.py         # post-generation source-level answer audit
 │   │   ├── legal_quality.py        # deterministic source profiles and audits
 │   │   ├── query_classifier.py
+│   │   ├── eval_runner.py          # deterministic eval-set checks
 │   │   └── query_rewriter.py
 │   ├── scheduler/
 │   └── static/demo_ui.html
 ├── tests/
 │   ├── test_legal_quality.py
 │   ├── test_answer_audit.py
+│   ├── test_eval_runner.py
 │   ├── test_demo_ui.py
 │   └── test_retrieval_quality.py
 ├── scripts/
@@ -282,13 +304,14 @@ Modal configuration:
 ```bash
 python -m pytest -q
 python -m pytest tests/test_legal_quality.py -q
+python -m pytest tests/test_answer_audit.py tests/test_eval_runner.py -q
 python -m pytest tests/test_retrieval_quality.py -v -s
 ```
 
 Current fast suite:
 
 ```text
-58 passed, 3 skipped
+65 passed, 3 skipped
 ```
 
 Quality checks include:
@@ -296,6 +319,7 @@ Quality checks include:
 - KG expansion regressions
 - legal source filtering
 - post-generation answer grounding audit
+- Kanzlei eval-set schema and regression-gate checks
 - mandatory-source injection
 - UI routing guards against raw-search fallback
 - retrieval quality evaluation across legal domains

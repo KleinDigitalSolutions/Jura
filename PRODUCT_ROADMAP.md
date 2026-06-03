@@ -7,9 +7,11 @@ Ziel: maximales Vertrauen für Kanzleien durch messbare Quellenbindung, reproduz
 ### Phase 1: Sofort - Vertrauen aufbauen
 
 - [x] Source-Level Answer Auditor: Jede generierte Antwort wird nachträglich gegen die bereitgestellten Quellen geprüft.
+- [x] Kanzlei-Core-Eval-Set mit den ersten 15 Fällen anlegen: 10 Regression Guards und 5 Known Gaps.
+- [x] Deterministischen Eval Runner bauen, der Quellen, Profile und Answer-Audit-Metadaten prüft, ohne Antworten zu hardcoden.
 - [ ] Audit-Ergebnis in der UI sichtbar machen: `pass`, `warn`, `fail`, Score, kritische Hinweise.
 - [ ] Blocking-Regel: Bei `fail` keine anwaltlich klingende Sicherheit anzeigen, sondern "Prüfung erforderlich" und konkrete Audit-Gründe nennen.
-- [ ] Kanzlei-Eval-Set mit den ersten 25 repräsentativen Fragen anlegen.
+- [ ] Kanzlei-Eval-Set auf 25 repräsentative Fragen erweitern.
 
 Akzeptanzkriterien:
 

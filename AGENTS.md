@@ -10,6 +10,8 @@ This repository is a Python Legal RAG system for German law-firm research workfl
 - `src/retrieval/`: query classification, rewriting, enhanced search, and deterministic legal quality controls.
 - `src/retrieval/legal_quality.py`: source profiles, mandatory-source injection, false-positive filtering, `retrieval_plan`, and `source_audit`.
 - `src/retrieval/answer_audit.py`: post-generation source-level auditing for material claims, missing citations, required norms, deadlines, and overconfident wording.
+- `src/retrieval/eval_runner.py`: deterministic Kanzlei eval-set runner that checks source and audit contracts without hardcoding answers.
+- `evals/kanzlei_core.json`: first 15 law-firm eval cases split into blocking `regression_guard` cases and non-blocking `known_gap` tracking cases.
 - `src/static/demo_ui.html`: Modal-served LEX chat UI.
 - `tests/`: pytest coverage for ingestion, retrieval, quality gates, and UI routing regressions.
 
@@ -55,10 +57,17 @@ Run tests:
 python -m pytest -q
 python -m pytest tests/test_legal_quality.py -q
 python -m pytest tests/test_answer_audit.py -q
+python -m pytest tests/test_eval_runner.py -q
 python -m pytest tests/test_retrieval_quality.py -v -s
 ```
 
-Latest fast-suite baseline: `58 passed, 3 skipped`.
+Run the Kanzlei eval gate against the enhanced live API:
+
+```bash
+python scripts/run_kanzlei_eval.py --eval-set evals/kanzlei_core.json --skip-known-gaps
+```
+
+Latest fast-suite baseline: `65 passed, 3 skipped`.
 
 ## Coding Style & Naming Conventions
 
@@ -95,6 +104,8 @@ Generated legal answers must return `answer_audit` from the enhanced and streami
 - required norms from `retrieval_plan.required_norms` are visible in the answer unless `source_audit.missing_required` says the source was unavailable
 - profile-specific deadlines are flagged when omitted
 - structural headings and greeting text are not treated as material claims
+
+Eval cases must not hardcode model answers. They define source and audit contracts only: `must_include`, `must_not_include`, `expected_profiles`, `max_high_audit_issues`, `risk_level`, and notes. Use `group: "regression_guard"` for build-blocking expectations and `group: "known_gap"` for visible product gaps that should not yet fail the gate.
 
 ## Commit & Pull Request Guidelines
 
