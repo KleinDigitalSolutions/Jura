@@ -187,14 +187,21 @@ def run_eval_set(
     top_k: int = 8,
     include_known_gaps: bool = True,
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    case_id: str | None = None,
 ) -> dict[str, Any]:
     """Run an eval set against the enhanced-answer endpoint."""
     endpoint = endpoint or eval_set.get("default_endpoint")
     if not endpoint:
         raise ValueError("No endpoint provided and eval set has no default_endpoint")
 
+    cases = list(eval_set["cases"])
+    if case_id:
+        cases = [case for case in cases if case.get("id") == case_id]
+        if not cases:
+            raise ValueError(f"Eval case not found: {case_id}")
+
     results: list[EvalCaseResult] = []
-    for case in eval_set["cases"]:
+    for case in cases:
         if case.get("group") == "known_gap" and not include_known_gaps:
             continue
         started = time.monotonic()

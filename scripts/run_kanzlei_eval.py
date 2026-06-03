@@ -21,8 +21,10 @@ def main() -> int:
     parser.add_argument("--endpoint", default=None, help="Override eval-set default endpoint")
     parser.add_argument("--top-k", type=int, default=8)
     parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--case", default=None, help="Run a single case by id, e.g. arbeitsrecht_kuendigung_ordentlich_001")
     parser.add_argument("--skip-known-gaps", action="store_true")
-    parser.add_argument("--json", action="store_true", help="Print machine-readable JSON report")
+    parser.add_argument("--json-report", action="store_true", help="Print machine-readable JSON report")
+    parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
         "--no-fail-on-regression",
         action="store_true",
@@ -37,9 +39,10 @@ def main() -> int:
         top_k=args.top_k,
         include_known_gaps=not args.skip_known_gaps,
         timeout=args.timeout,
+        case_id=args.case,
     )
 
-    if args.json:
+    if args.json_report or args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:
         print(format_eval_report(summary))

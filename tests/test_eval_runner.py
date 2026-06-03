@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
-from src.retrieval.eval_runner import evaluate_response, format_eval_report, load_eval_set, normalize_norm_label
+import pytest
+
+from src.retrieval import eval_runner
+from src.retrieval.eval_runner import evaluate_response, format_eval_report, load_eval_set, normalize_norm_label, run_eval_set
 
 
 def _case(**overrides):
@@ -126,3 +129,68 @@ def test_format_eval_report_marks_known_gaps_separately():
 
     assert "GAP arbeitsrecht_001" in report
     assert "too_many_high_audit_issues" in report
+
+
+def test_run_eval_set_filters_single_case_before_endpoint_call(monkeypatch):
+    calls = []
+
+    def fake_call(endpoint, query, top_k=8, timeout=180):
+        calls.append(query)
+        return _response()
+
+    monkeypatch.setattr(eval_runner, "call_enhanced_endpoint", fake_call)
+    eval_set = {
+        "name": "unit",
+        "version": 1,
+        "default_endpoint": "https://example.test/api",
+        "cases": [
+            _case(id="case_a", query="Frage A"),
+            _case(id="case_b", query="Frage B"),
+        ],
+    }
+
+    summary = run_eval_set(eval_set, case_id="case_b")
+
+    assert calls == ["Frage B"]
+    assert summary["total"] == 1
+    assert summary["results"][0]["case_id"] == "case_b"
+
+
+def test_run_eval_set_rejects_unknown_single_case_before_endpoint_call(monkeypatch):
+    def fail_call(*args, **kwargs):
+        raise AssertionError("endpoint should not be called")
+
+    monkeypatch.setattr(eval_runner, "call_enhanced_endpoint", fail_call)
+    eval_set = {
+        "name": "unit",
+        "version": 1,
+        "default_endpoint": "https://example.test/api",
+        "cases": [_case(id="case_a", query="Frage A")],
+    }
+
+    with pytest.raises(ValueError, match="Eval case not found"):
+        run_eval_set(eval_set, case_id="missing")
+
+
+def test_run_eval_set_can_skip_known_gaps(monkeypatch):
+    calls = []
+
+    def fake_call(endpoint, query, top_k=8, timeout=180):
+        calls.append(query)
+        return _response()
+
+    monkeypatch.setattr(eval_runner, "call_enhanced_endpoint", fake_call)
+    eval_set = {
+        "name": "unit",
+        "version": 1,
+        "default_endpoint": "https://example.test/api",
+        "cases": [
+            _case(id="guard", query="Guard", group="regression_guard"),
+            _case(id="gap", query="Gap", group="known_gap"),
+        ],
+    }
+
+    summary = run_eval_set(eval_set, include_known_gaps=False)
+
+    assert calls == ["Guard"]
+    assert summary["total"] == 1
