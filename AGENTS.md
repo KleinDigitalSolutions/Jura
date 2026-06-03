@@ -68,7 +68,7 @@ python scripts/run_kanzlei_eval.py --eval-set evals/kanzlei_core.json --skip-kno
 python scripts/run_kanzlei_eval.py --case arbeitsrecht_kuendigung_ordentlich_001 --json-report
 ```
 
-Latest fast-suite baseline: `70 passed, 3 skipped`.
+Latest fast-suite baseline: `72 passed, 3 skipped`.
 
 ## Coding Style & Naming Conventions
 

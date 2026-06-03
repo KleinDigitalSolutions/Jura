@@ -16,6 +16,13 @@ def test_chat_fallback_uses_enhanced_answer_pipeline_not_raw_search():
     assert "fallbackAsk(queryWithCase);" in html
 
 
+def test_streaming_ui_does_not_finalize_empty_placeholder_answers():
+    html = UI_PATH.read_text(encoding="utf-8")
+    assert "Erstelle juristisches Gutachten" not in html
+    assert "updateStreamingMessage('')" not in html
+    assert "if (!text || !text.trim()) {\n    if (msg) msg.remove();\n    return;\n  }" in html
+
+
 def test_chat_labels_answers_as_checked_analysis():
     html = UI_PATH.read_text(encoding="utf-8")
     assert "LEX · geprüfte Analyse" in html
@@ -38,3 +45,12 @@ def test_export_is_kanzlei_memo_with_audit_and_source_appendix():
     assert "## Anwalt-Handoff" in html
     assert "## Quellenanhang" in html
     assert "auditMarkdown" in html
+
+
+def test_mobile_layout_has_compact_responsive_rules():
+    html = UI_PATH.read_text(encoding="utf-8")
+    assert "@media (max-width: 860px)" in html
+    assert "--sidebar-w: min(86vw, 320px)" in html
+    assert ".chat-header-actions button:not(.docs-btn)" in html
+    assert ".audit-section" in html
+    assert "env(safe-area-inset-bottom)" in html

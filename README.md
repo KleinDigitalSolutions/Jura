@@ -11,7 +11,7 @@
 [![Modal](https://img.shields.io/badge/Modal-GPU_Deployment-7C3AED?style=for-the-badge)](https://modal.com/)
 [![Qdrant](https://img.shields.io/badge/Qdrant-Hybrid_Search-DC244C?style=for-the-badge)](https://qdrant.tech/)
 [![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash_Lite-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
-[![Pytest](https://img.shields.io/badge/Tests-70_Passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
+[![Pytest](https://img.shields.io/badge/Tests-72_Passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
 
 </div>
 
@@ -312,7 +312,7 @@ python -m pytest tests/test_retrieval_quality.py -v -s
 Current fast suite:
 
 ```text
-70 passed, 3 skipped
+72 passed, 3 skipped
 ```
 
 Quality checks include:
