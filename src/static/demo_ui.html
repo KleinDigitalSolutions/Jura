@@ -701,6 +701,92 @@
     color: var(--green);
     font-weight: 600;
   }
+  .msg-meta .audit-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .audit-tag.pass {
+    color: var(--green);
+    background: var(--green-light);
+    border-color: rgba(5, 150, 105, 0.18);
+  }
+  .audit-tag.warn {
+    color: var(--gold-text);
+    background: var(--gold-light);
+    border-color: var(--gold-border);
+  }
+  .audit-tag.fail,
+  .audit-tag.error {
+    color: var(--red);
+    background: var(--red-light);
+    border-color: rgba(220, 38, 38, 0.18);
+  }
+
+  .audit-section {
+    margin: -8px 0 18px 24px;
+    border-left: 2px solid var(--border);
+    padding-left: 14px;
+  }
+  .audit-box {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    box-shadow: var(--shadow);
+  }
+  .audit-box.pass { border-left: 3px solid var(--green); }
+  .audit-box.warn { border-left: 3px solid var(--gold); }
+  .audit-box.fail,
+  .audit-box.error { border-left: 3px solid var(--red); }
+  .audit-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+  .audit-title span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .audit-score {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .audit-detail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .audit-pill {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+  }
+  .audit-issues {
+    margin-top: 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.5;
+  }
 
   /* Streaming cursor */
   .streaming-cursor::after {
@@ -1512,6 +1598,62 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function auditStatusText(status) {
+  const s = (status || '').toLowerCase();
+  if (s === 'pass') return 'Quellenprüfung bestanden';
+  if (s === 'warn') return 'Quellenprüfung mit Hinweisen';
+  if (s === 'fail') return 'Anwaltliche Prüfung erforderlich';
+  if (s === 'error') return 'Audit nicht verfügbar';
+  return 'Quellenprüfung ausstehend';
+}
+
+function auditIcon(status) {
+  const s = (status || '').toLowerCase();
+  if (s === 'pass') return '<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>';
+  if (s === 'warn') return '<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+  return '<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+}
+
+function renderAuditBadge(audit) {
+  if (!audit || !audit.status) return '';
+  const status = String(audit.status).toLowerCase();
+  return `<span class="audit-tag ${escHtml(status)}">${auditIcon(status)} ${escHtml(auditStatusText(status))}</span>`;
+}
+
+function renderAuditSection(audit, retrievalPlan) {
+  if (!audit || !audit.status) return '';
+  const status = String(audit.status).toLowerCase();
+  const score = Number.isFinite(Number(audit.score)) ? `${Number(audit.score)}/100` : '-';
+  const high = Number(audit.high_severity_count || 0);
+  const medium = Number(audit.medium_severity_count || 0);
+  const claims = Number(audit.material_claims || 0);
+  const cited = Number(audit.cited_claims || 0);
+  const required = (retrievalPlan && retrievalPlan.required_norms) || [];
+  const issues = (audit.issues || []).slice(0, 3);
+  const fulfilled = required.length
+    ? `<div class="audit-detail">${required.map(n => `<span class="audit-pill">${escHtml(n)}</span>`).join('')}</div>`
+    : '';
+  const issueHtml = issues.length
+    ? `<div class="audit-issues">${issues.map(i => `• ${escHtml(i.issue || 'Hinweis')}: ${escHtml(i.detail || i.claim || '')}`).join('<br>')}</div>`
+    : '';
+
+  return `<div class="audit-section">
+    <div class="audit-box ${escHtml(status)}">
+      <div class="audit-title">
+        <span>${auditIcon(status)} ${escHtml(auditStatusText(status))}</span>
+        <span class="audit-score">Score ${escHtml(score)}</span>
+      </div>
+      <div class="audit-detail">
+        <span class="audit-pill">${cited}/${claims} Aussagen zitiert</span>
+        <span class="audit-pill">${high} kritisch</span>
+        <span class="audit-pill">${medium} Hinweise</span>
+      </div>
+      ${fulfilled}
+      ${issueHtml}
+    </div>
+  </div>`;
+}
+
 /* ═══════════════════════════════════════════
    CHAT MANAGEMENT
    ═══════════════════════════════════════════ */
@@ -1522,7 +1664,7 @@ function newChat() {
   document.getElementById('welcome').classList.remove('hidden');
   
   const inner = document.getElementById('messagesInner');
-  inner.querySelectorAll('.msg, .sources-section, .error-msg, .loading-msg, .pipeline-status').forEach(el => el.remove());
+  inner.querySelectorAll('.msg, .sources-section, .audit-section, .error-msg, .loading-msg, .pipeline-status').forEach(el => el.remove());
   
   document.getElementById('welcome').classList.remove('hidden');
   document.getElementById('queryInput').value = '';
@@ -1587,7 +1729,7 @@ function deleteChat(id) {
 
 function renderChatHistory(chat) {
   const inner = document.getElementById('messagesInner');
-  inner.querySelectorAll('.msg, .sources-section, .error-msg, .loading-msg, .pipeline-status').forEach(el => el.remove());
+  inner.querySelectorAll('.msg, .sources-section, .audit-section, .error-msg, .loading-msg, .pipeline-status').forEach(el => el.remove());
   document.getElementById('welcome').classList.add('hidden');
 
   if (!chat.messages) return;
@@ -1595,12 +1737,16 @@ function renderChatHistory(chat) {
     if (msg.role === 'user') {
       addUserMessage(msg.content, false);
     } else if (msg.role === 'assistant') {
-      addAssistantMessage(msg.content, msg.sources || [], msg.model || '', false);
+      addAssistantMessage(msg.content, msg.sources || [], msg.model || '', false, {
+        answerAudit: msg.answerAudit || null,
+        retrievalPlan: msg.retrievalPlan || null,
+        sourceAudit: msg.sourceAudit || null,
+      });
     }
   });
 }
 
-function addMessageToCurrentChat(role, content, sources, model) {
+function addMessageToCurrentChat(role, content, sources, model, metadata = {}) {
   let chat = getCurrentChat();
   if (!chat) {
     chat = {
@@ -1619,7 +1765,16 @@ function addMessageToCurrentChat(role, content, sources, model) {
       document.getElementById('chatTitle').textContent = chat.title;
     }
   } else if (role === 'assistant') {
-    chat.messages.push({ role, content, sources: sources || [], model: model || '', timestamp: Date.now() });
+    chat.messages.push({
+      role,
+      content,
+      sources: sources || [],
+      model: model || '',
+      answerAudit: metadata.answerAudit || null,
+      retrievalPlan: metadata.retrievalPlan || null,
+      sourceAudit: metadata.sourceAudit || null,
+      timestamp: Date.now(),
+    });
   }
   chat.updatedAt = Date.now();
   saveChats();
@@ -1640,13 +1795,14 @@ function addUserMessage(text, animate = true) {
   return div;
 }
 
-function addAssistantMessage(text, sources, model, streaming = false) {
+function addAssistantMessage(text, sources, model, streaming = false, metadata = {}) {
   const inner = document.getElementById('messagesInner');
   const div = document.createElement('div');
   div.className = 'msg assistant';
   div.id = streaming ? 'streaming-msg' : '';
 
   let modelBadge = model ? `<span class="model-badge">${escHtml(model)}</span>` : '';
+  const auditBadge = renderAuditBadge(metadata.answerAudit);
 
   div.innerHTML = `
     <div class="bubble">
@@ -1658,9 +1814,17 @@ function addAssistantMessage(text, sources, model, streaming = false) {
         <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
         LEX · geprüfte Analyse
       </span>
+      ${auditBadge}
     </div>`;
   inner.appendChild(div);
   scrollToBottom();
+
+  const auditHtml = renderAuditSection(metadata.answerAudit, metadata.retrievalPlan);
+  if (!streaming && auditHtml) {
+    const auditDiv = document.createElement('div');
+    auditDiv.innerHTML = auditHtml;
+    inner.appendChild(auditDiv.firstElementChild);
+  }
 
   if (!streaming && sources && sources.length > 0) {
     window._lastSources = sources;
@@ -1736,7 +1900,7 @@ function updateStreamingMessage(text) {
   scrollToBottom();
 }
 
-function finalizeStreamingMessage(text, sources, model) {
+function finalizeStreamingMessage(text, sources, model, metadata = {}) {
   const msg = document.getElementById('streaming-msg');
   if (msg) {
     if (!text || !text.trim()) {
@@ -1749,8 +1913,21 @@ function finalizeStreamingMessage(text, sources, model) {
       }
       const badge = document.getElementById('streamModelBadge');
       if (badge && model) badge.textContent = model;
+      const meta = msg.querySelector('.msg-meta');
+      const auditBadge = renderAuditBadge(metadata.answerAudit);
+      if (meta && auditBadge && !meta.querySelector('.audit-tag')) {
+        meta.insertAdjacentHTML('beforeend', auditBadge);
+      }
       msg.id = '';
     }
+  }
+
+  const auditHtml = renderAuditSection(metadata.answerAudit, metadata.retrievalPlan);
+  if (auditHtml) {
+    const inner = document.getElementById('messagesInner');
+    const auditDiv = document.createElement('div');
+    auditDiv.innerHTML = auditHtml;
+    inner.appendChild(auditDiv.firstElementChild);
   }
 
   if (sources && sources.length > 0) {
@@ -1799,6 +1976,9 @@ async function handleSubmit() {
   let answerText = '';
   let sources = [];
   let model = '';
+  let answerAudit = null;
+  let retrievalPlan = null;
+  let sourceAudit = null;
 
   try {
     const es = new EventSource('/api/legal/ask/stream?q=' + encodeURIComponent(queryWithCase) + '&top_k=5');
@@ -1806,6 +1986,8 @@ async function handleSubmit() {
     es.addEventListener('search', (e) => {
       const data = JSON.parse(e.data);
       sources = data.citations || [];
+      retrievalPlan = data.retrieval_plan || null;
+      sourceAudit = data.source_audit || null;
       currentSources = sources;
       window._lastSources = sources;
 
@@ -1831,6 +2013,9 @@ async function handleSubmit() {
     es.addEventListener('done', (e) => {
       const data = JSON.parse(e.data);
       model = data.model || 'deepseek-chat';
+      answerAudit = data.answer_audit || null;
+      retrievalPlan = data.retrieval_plan || retrievalPlan;
+      sourceAudit = data.source_audit || sourceAudit;
       currentModel = model;
 
       if (!answerText || !answerText.trim()) {
@@ -1839,12 +2024,12 @@ async function handleSubmit() {
         return;
       }
 
-      finalizeStreamingMessage(answerText, sources, model);
+      finalizeStreamingMessage(answerText, sources, model, { answerAudit, retrievalPlan, sourceAudit });
       es.close();
       sendBtn.disabled = false;
       state.isStreaming = false;
 
-      addMessageToCurrentChat('assistant', answerText, sources, model);
+      addMessageToCurrentChat('assistant', answerText, sources, model, { answerAudit, retrievalPlan, sourceAudit });
     });
 
     es.addEventListener('error', (e) => {
@@ -1855,8 +2040,8 @@ async function handleSubmit() {
         return;
       }
 
-      finalizeStreamingMessage(answerText, sources, model);
-      addMessageToCurrentChat('assistant', answerText, sources, model);
+      finalizeStreamingMessage(answerText, sources, model, { answerAudit, retrievalPlan, sourceAudit });
+      addMessageToCurrentChat('assistant', answerText, sources, model, { answerAudit, retrievalPlan, sourceAudit });
       es.close();
       sendBtn.disabled = false;
       state.isStreaming = false;
@@ -1869,8 +2054,8 @@ async function handleSubmit() {
         state.isStreaming = false;
         hideTerminal();
         if (answerText) {
-          finalizeStreamingMessage(answerText, sources, model);
-          addMessageToCurrentChat('assistant', answerText, sources, model);
+          finalizeStreamingMessage(answerText, sources, model, { answerAudit, retrievalPlan, sourceAudit });
+          addMessageToCurrentChat('assistant', answerText, sources, model, { answerAudit, retrievalPlan, sourceAudit });
         } else {
           fallbackAsk(queryWithCase);
         }
@@ -1910,10 +2095,13 @@ async function fallbackAsk(q) {
     const sources = data.citations || [];
     const answer = data.answer;
     const model = data.model || 'geprüfte Analyse';
+    const answerAudit = data.answer_audit || null;
+    const retrievalPlan = data.retrieval_plan || null;
+    const sourceAudit = data.source_audit || null;
     window._lastSources = sources;
 
-    addAssistantMessage(answer, sources, model);
-    addMessageToCurrentChat('assistant', answer, sources, model);
+    addAssistantMessage(answer, sources, model, false, { answerAudit, retrievalPlan, sourceAudit });
+    addMessageToCurrentChat('assistant', answer, sources, model, { answerAudit, retrievalPlan, sourceAudit });
   } catch (e) {
     const errDiv = document.createElement('div');
     errDiv.className = 'error-msg';
@@ -2076,33 +2264,70 @@ function handleFileUpload(e) {
 /* ═══════════════════════════════════════════
    EXPORT
    ═══════════════════════════════════════════ */
+function sourceLabel(source) {
+  const law = source.abkürzung || source.gesetz || source.gericht || '';
+  const paragraph = source.paragraph || source.aktenzeichen || '';
+  const title = source.paragraph_titel || source.titel || '';
+  return `${law} ${paragraph}${title ? ' — ' + title : ''}`.trim();
+}
+
+function auditMarkdown(audit, retrievalPlan, sourceAudit) {
+  if (!audit) return 'Auditstatus: nicht verfügbar\n\n';
+  let md = `Auditstatus: ${audit.status || '-'}\n`;
+  md += `Audit-Score: ${Number.isFinite(Number(audit.score)) ? audit.score + '/100' : '-'}\n`;
+  md += `Materielle Aussagen: ${audit.cited_claims || 0}/${audit.material_claims || 0} zitiert\n`;
+  md += `Kritische Audit-Hinweise: ${audit.high_severity_count || 0}\n`;
+  md += `Weitere Hinweise: ${audit.medium_severity_count || 0}\n`;
+  const required = retrievalPlan?.required_norms || [];
+  if (required.length) md += `Pflichtquellen: ${required.join(', ')}\n`;
+  const missing = sourceAudit?.missing_required || audit.retrieval_missing_required || [];
+  if (missing.length) md += `Fehlende Pflichtquellen: ${missing.join(', ')}\n`;
+  const issues = audit.issues || [];
+  if (issues.length) {
+    md += `\nAudit-Hinweise:\n`;
+    issues.slice(0, 8).forEach(i => {
+      md += `- ${i.issue || 'Hinweis'}: ${i.detail || i.claim || ''}\n`;
+    });
+  }
+  return md + '\n';
+}
+
 function exportChat() {
   const chat = getCurrentChat();
   if (!chat || !chat.messages || chat.messages.length === 0) {
     return;
   }
 
-  let md = `# LEX — Juristische Recherche\n\n`;
+  let md = `# LEX — Kanzlei-Memo\n\n`;
   md += `**Titel:** ${chat.title || 'Unbenannt'}\n`;
-  md += `**Datum:** ${new Date().toLocaleDateString('de-DE')}\n\n`;
+  md += `**Datum:** ${new Date().toLocaleDateString('de-DE')}\n`;
+  md += `**Status:** KI-gestützter Entwurf, anwaltlich zu prüfen\n\n`;
   md += `---\n\n`;
 
   chat.messages.forEach(m => {
     if (m.role === 'user') {
       md += `## Frage\n\n${m.content}\n\n`;
     } else if (m.role === 'assistant') {
-      md += `## Antwort ${m.model ? '(' + m.model + ')' : ''}\n\n${m.content}\n\n`;
+      md += `## Rechtliche Ersteinschätzung ${m.model ? '(' + m.model + ')' : ''}\n\n${m.content}\n\n`;
+      md += `## Quellen- und Auditstatus\n\n`;
+      md += auditMarkdown(m.answerAudit, m.retrievalPlan, m.sourceAudit);
+      md += `## Anwalt-Handoff\n\n`;
+      md += `- Antwort als Entwurf prüfen und freigeben.\n`;
+      md += `- Sachverhalt, Fristen, Zugangsnachweise und Unterlagen anhand der Akte verifizieren.\n`;
+      md += `- Kritische Audit-Hinweise vor Mandantenkommunikation klären.\n\n`;
       if (m.sources && m.sources.length > 0) {
-        md += `### Quellen\n\n`;
+        md += `## Quellenanhang\n\n`;
         m.sources.forEach((s, i) => {
-          md += `${i + 1}. ${s.abkürzung || ''} ${s.paragraph || ''} — Score: ${(s.rerank_score || s.score || 0).toFixed(4)}\n`;
+          const score = Number(s.rerank_score || s.score || 0);
+          md += `${i + 1}. ${sourceLabel(s)} — Score: ${score.toFixed(4)}${s.stand ? ' — Stand: ' + s.stand : ''}\n`;
+          if (s.url) md += `   ${s.url}\n`;
         });
         md += '\n';
       }
     }
   });
 
-  md += `---\n*Exportiert von LEX — Juristischer KI-Assistent*\n`;
+  md += `---\n*Exportiert von LEX — Juristischer KI-Assistent. Keine Rechtsberatung; anwaltliche Endkontrolle erforderlich.*\n`;
 
   const blob = new Blob([md], { type: 'text/markdown' });
   const url = URL.createObjectURL(blob);

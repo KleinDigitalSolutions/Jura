@@ -67,7 +67,7 @@ Run the Kanzlei eval gate against the enhanced live API:
 python scripts/run_kanzlei_eval.py --eval-set evals/kanzlei_core.json --skip-known-gaps
 ```
 
-Latest fast-suite baseline: `65 passed, 3 skipped`.
+Latest fast-suite baseline: `67 passed, 3 skipped`.
 
 ## Coding Style & Naming Conventions
 
